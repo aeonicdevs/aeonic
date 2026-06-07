@@ -33,8 +33,8 @@ Add these GitHub repository secrets:
 - `DO_SSH_USER` - SSH user, for example `root` or `deploy`
 - `DO_SSH_KEY` - private SSH key with access to the Droplet
 - `DO_SSH_PORT` - optional SSH port; defaults to `22`
-- `DEPLOY_PATH` - optional remote path; defaults to `/opt/aeonic`
+- `DEPLOY_PATH` - optional remote path; defaults to `/home/<DO_SSH_USER>/aeonic`
 
 The Droplet needs Docker and the Docker Compose plugin installed.
 
-If you need production environment variables, create a `.env` file at the remote deploy path, for example `/opt/aeonic/.env`. The deploy workflow preserves that file.
+If you need production environment variables, create a `.env` file at the remote deploy path, for example `/home/deploy/aeonic/.env`. The deploy workflow preserves that file.

@@ -72,7 +72,7 @@ jobs:
           DO_SSH_USER: ${{ secrets.DO_SSH_USER }}
         run: |
           set -euo pipefail
-          REMOTE_PATH="${DEPLOY_PATH:-/opt/aeonic}"
+          REMOTE_PATH="${DEPLOY_PATH:-/home/$DO_SSH_USER/aeonic}"
           SSH_TARGET="$DO_SSH_USER@$DO_SSH_HOST"
 
           ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH'"
