@@ -36,6 +36,7 @@ jobs:
     name: Deploy backend
     needs: test
     runs-on: ubuntu-latest
+    environment: prod
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Check out repository
