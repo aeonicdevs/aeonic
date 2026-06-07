@@ -1,0 +1,101 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest
+
+  deploy:
+    name: Deploy backend
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          DO_SSH_HOST: ${{ secrets.DO_SSH_HOST }}
+          DO_SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+          DO_SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          DO_SSH_USER: ${{ secrets.DO_SSH_USER }}
+        run: |
+          set -euo pipefail
+          : "${DO_SSH_HOST:?Missing DO_SSH_HOST secret}"
+          : "${DO_SSH_KEY:?Missing DO_SSH_KEY secret}"
+          : "${DO_SSH_USER:?Missing DO_SSH_USER secret}"
+          SSH_PORT="${DO_SSH_PORT:-22}"
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DO_SSH_KEY" > ~/.ssh/digitalocean_deploy_key
+          chmod 600 ~/.ssh/digitalocean_deploy_key
+          ssh-keyscan -p "$SSH_PORT" "$DO_SSH_HOST" >> ~/.ssh/known_hosts
+
+          cat >> "$GITHUB_ENV" <<EOF
+          SSH_PORT=$SSH_PORT
+          SSH_KEY_PATH=$HOME/.ssh/digitalocean_deploy_key
+          EOF
+
+      - name: Sync project to Droplet
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DO_SSH_HOST: ${{ secrets.DO_SSH_HOST }}
+          DO_SSH_USER: ${{ secrets.DO_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE_PATH="${DEPLOY_PATH:-/opt/aeonic}"
+          SSH_TARGET="$DO_SSH_USER@$DO_SSH_HOST"
+
+          ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH'"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.env' \
+            --exclude 'backend/.env' \
+            --exclude 'backend/.venv' \
+            --exclude 'frontend/node_modules' \
+            -e "ssh -i $SSH_KEY_PATH -p $SSH_PORT" \
+            ./ "$SSH_TARGET:$REMOTE_PATH/"
+
+          cat >> "$GITHUB_ENV" <<EOF
+          REMOTE_PATH=$REMOTE_PATH
+          SSH_TARGET=$SSH_TARGET
+          EOF
+
+      - name: Restart backend
+        run: |
+          set -euo pipefail
+          ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
+          set -euo pipefail
+          cd "$REMOTE_PATH"
+          docker compose up -d --build backend
+          docker image prune -f
+          EOF
