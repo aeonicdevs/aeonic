@@ -1,0 +1,4 @@
+@use 'vuetify/settings' with (
+  $body-font-family: ('Hanken Grotesk', ui-sans-serif, system-ui, sans-serif),
+  $border-radius-root: 10px
+);
