@@ -3,7 +3,12 @@
 This repo is split into:
 
 - `backend/` - FastAPI application
-- `frontend/` - frontend application placeholder
+- `apps/site/` - public marketing site
+- `apps/connect/` - business/operator platform for customer organizations
+- `apps/nexus/` - end-user app for patients and members
+
+Shared frontend packages can be added under `packages/` when there is enough
+shared UI, configuration, or API client code to justify them.
 
 ## Backend
 
