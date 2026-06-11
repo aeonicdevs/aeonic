@@ -100,26 +100,26 @@ const capabilities = [
         </div>
       </section>
 
-      <section class="section">
+      <section class="section section--doors">
         <div class="container">
           <SectionHeader
             eyebrow="One system, front to back"
-            title="The <em>front end</em> patients feel, and the <em>back end</em> behind it."
-            lead="Aeonic Continuum is the clinical program. Aeonic Nexus is the platform that runs the practice, patient experience, and operating workflows."
+            title="One system: the front end patients feel, and the back end behind it."
+            lead="Aeonic is one system. Health is the medicine — the protocols and treatments. Connect is the platform that runs it."
           />
 
           <div class="door-grid">
             <NuxtLink class="door-card" to="/programs">
-              <span>The patient-facing layer</span>
-              <h3>Aeonic Continuum</h3>
-              <p>The protocols, treatment systems, education, and portal experience patients actually use.</p>
-              <strong>Explore the program</strong>
+              <span>The forward-facing layer</span>
+              <h3><img src="/assets/aeonic-mark.png" alt="" />AEONIC <small>HEALTH</small></h3>
+              <p>The protocols, programming, and treatment systems — the clinical care patients actually experience.</p>
+              <strong>Explore Aeonic Continuum <span aria-hidden="true">→</span></strong>
             </NuxtLink>
             <NuxtLink class="door-card" to="/nexus">
               <span>The platform layer</span>
-              <h3>Aeonic Nexus</h3>
-              <p>The software and rails for prescribing, labs, pharmacy, compliance, billing, and member operations.</p>
-              <strong>Explore Nexus</strong>
+              <h3><img src="/assets/aeonic-mark.png" alt="" />AEONIC <small>CONNECT</small></h3>
+              <p>The software and rails that run Health — prescribing, pharmacy, labs, compliance, and billing in one clinical backend.</p>
+              <strong>Explore Aeonic Nexus <span aria-hidden="true">→</span></strong>
             </NuxtLink>
           </div>
         </div>
@@ -131,9 +131,9 @@ const capabilities = [
             <img src="/assets/hero-health.webp" alt="" />
             <div>
               <span class="eyebrow">The Programs · Aeonic Continuum</span>
-              <h2>Health is the program: the <em>protocols patients experience</em>.</h2>
+              <h2>Health is the program — the protocols patients experience.</h2>
               <p>A deployable, scalable program on the Aeonic back end: physician-led, lab-guided protocols for weight, hormones, energy, performance, and recovery.</p>
-              <NuxtLink class="btn btn--primary" to="/programs">Explore Aeonic Continuum</NuxtLink>
+              <NuxtLink class="btn btn--primary" to="/programs">Bring the program to your practice <span aria-hidden="true">→</span></NuxtLink>
             </div>
           </article>
 
@@ -153,9 +153,9 @@ const capabilities = [
             <img src="/assets/hero-nexus.avif" alt="" />
             <div>
               <span class="eyebrow">The Platform · Aeonic Nexus</span>
-              <h2>Nexus is the platform: the <em>rails that run it</em>.</h2>
+              <h2>Nexus is the platform — the rails that run it.</h2>
               <p>The software behind the protocols: a provider console on one side, a branded patient portal on the other, wired to prescribing, pharmacy, labs, and billing.</p>
-              <NuxtLink class="btn btn--primary" to="/nexus">Explore Aeonic Nexus</NuxtLink>
+              <NuxtLink class="btn btn--primary" to="/nexus">Deploy the platform in your clinic <span aria-hidden="true">→</span></NuxtLink>
             </div>
           </article>
 
