@@ -1254,6 +1254,56 @@ blockquote {
     min-height: 50px;
   }
 
+  .section--doors {
+    padding-top: 54px;
+  }
+
+  .section--doors .section-header {
+    justify-items: start;
+    margin-bottom: 50px;
+    text-align: left;
+  }
+
+  .section--doors .section-header .eyebrow {
+    justify-self: start;
+  }
+
+  .section--doors .section-header h2 {
+    margin-inline: 0;
+    font-size: clamp(2rem, 8.5vw, 2.35rem);
+    line-height: 1.02;
+  }
+
+  .section--doors .section-header p {
+    margin-inline: 0;
+    font-size: 1.08rem;
+    line-height: 1.58;
+  }
+
+  .door-grid {
+    gap: 18px;
+  }
+
+  .door-card {
+    min-height: 300px;
+    padding: 30px 28px;
+  }
+
+  .door-card h3 {
+    gap: 12px;
+    font-size: 1.45rem;
+  }
+
+  .door-card h3 img {
+    width: 32px;
+    height: 32px;
+  }
+
+  .door-card h3 small {
+    padding-left: 12px;
+    font-size: 0.72em;
+  }
+
   .ruled-grid,
   .flow-grid,
   .site-footer__nav {
