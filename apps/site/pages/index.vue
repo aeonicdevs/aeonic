@@ -73,29 +73,28 @@ const capabilities = [
         <div class="hero__shade" />
         <div class="container hero__content">
           <div class="hero__copy">
-            <span class="eyebrow">Aeonic Health Systems</span>
-            <h1>The complete <em>operating system</em> for longevity protocols.</h1>
+            <h1>The complete operating system for longevity protocols.</h1>
             <p>
-              Aeonic plugs into an existing clinic or brand, or launches a new one on top of a complete clinical,
-              software, and governance layer.
+              Aeonic is the complete operating system for longevity medicine — plug it into your existing clinic or
+              brand, or build a new one on it.
             </p>
             <div class="hero__actions">
-              <NuxtLink class="btn btn--primary" to="/connect-inquiry">Book a demo</NuxtLink>
-              <NuxtLink class="btn btn--secondary" to="#how-it-works">How it works</NuxtLink>
+              <NuxtLink class="btn btn--primary" to="/connect-inquiry">Get started <span aria-hidden="true">→</span></NuxtLink>
+              <NuxtLink class="btn btn--secondary" to="#how-it-works">How it works <span aria-hidden="true">→</span></NuxtLink>
             </div>
           </div>
           <div class="hero-stats" aria-label="Aeonic summary">
             <div>
+              <strong>Aeonic Health Systems</strong>
+              <span>The complete system for longevity medicine</span>
+            </div>
+            <div>
               <strong>Physician-led</strong>
-              <span>Licensed clinical oversight</span>
+              <span>Licensed oversight</span>
             </div>
             <div>
-              <strong>50-state aware</strong>
-              <span>Compliance and governance workflows</span>
-            </div>
-            <div>
-              <strong>One system</strong>
-              <span>Programs, platform, and intelligence</span>
+              <strong>50-State</strong>
+              <span>Compliance</span>
             </div>
           </div>
         </div>

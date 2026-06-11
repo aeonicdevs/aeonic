@@ -3,7 +3,7 @@ const isOpen = ref(false)
 
 const menuGroups = [
   {
-    label: 'Programs',
+    label: 'The Programs',
     items: [
       ['Aeonic Continuum', '/programs', 'The clinical program patients experience'],
       ['Protocols', '/treatments', 'Care lines, dosing logic, and guided treatment'],
@@ -11,7 +11,7 @@ const menuGroups = [
     ]
   },
   {
-    label: 'Platform',
+    label: 'The Platform',
     items: [
       ['Aeonic Nexus', '/nexus', 'The platform behind the practice'],
       ['Capabilities', '/#capabilities', 'The operating layer end to end'],
@@ -34,7 +34,7 @@ const menuGroups = [
     <div class="site-nav__inner container">
       <NuxtLink class="brand" to="/" aria-label="Aeonic home">
         <img class="brand__mark" src="/assets/aeonic-mark.png" alt="" />
-        <span class="brand__word">Aeonic</span>
+        <span class="brand__word">AEONIC</span>
       </NuxtLink>
 
       <nav class="site-nav__links" aria-label="Main navigation">
@@ -52,13 +52,7 @@ const menuGroups = [
       </nav>
 
       <div class="site-nav__actions">
-        <div class="property-switch" aria-label="Aeonic properties">
-          <NuxtLink to="/" aria-current="page">System</NuxtLink>
-          <NuxtLink to="/programs">Program</NuxtLink>
-          <NuxtLink to="/nexus">Nexus</NuxtLink>
-        </div>
-        <NuxtLink class="btn btn--small btn--secondary" to="/partner-login">Partner login</NuxtLink>
-        <NuxtLink class="btn btn--small btn--primary" to="/connect-inquiry">Book a demo</NuxtLink>
+        <NuxtLink class="btn btn--small btn--secondary nav-getstarted" to="/connect-inquiry">Get started</NuxtLink>
         <button class="menu-toggle" type="button" :aria-expanded="isOpen" aria-controls="mobile-menu" @click="isOpen = !isOpen">
           <span />
           <span />
@@ -72,7 +66,7 @@ const menuGroups = [
       <NuxtLink to="/nexus" @click="isOpen = false">Nexus</NuxtLink>
       <NuxtLink to="/#capabilities" @click="isOpen = false">Capabilities</NuxtLink>
       <NuxtLink to="/partner-login" @click="isOpen = false">Partner login</NuxtLink>
-      <NuxtLink to="/connect-inquiry" @click="isOpen = false">Book a demo</NuxtLink>
+      <NuxtLink to="/connect-inquiry" @click="isOpen = false">Get started</NuxtLink>
     </div>
   </header>
 </template>
