@@ -15,7 +15,7 @@ const menuGroups = [
     items: [
       ['Aeonic Nexus', '/nexus', 'The platform behind the practice'],
       ['Capabilities', '/#capabilities', 'The operating layer end to end'],
-      ['Deployments', '/#how-it-works', 'How clinics launch and scale']
+      ['Partner login', '/partner-login', 'Console access for clinical teams']
     ]
   },
   {
@@ -57,7 +57,8 @@ const menuGroups = [
           <NuxtLink to="/programs">Program</NuxtLink>
           <NuxtLink to="/nexus">Nexus</NuxtLink>
         </div>
-        <NuxtLink class="btn btn--small btn--primary" to="/contact">Book a demo</NuxtLink>
+        <NuxtLink class="btn btn--small btn--secondary" to="/partner-login">Partner login</NuxtLink>
+        <NuxtLink class="btn btn--small btn--primary" to="/connect-inquiry">Book a demo</NuxtLink>
         <button class="menu-toggle" type="button" :aria-expanded="isOpen" aria-controls="mobile-menu" @click="isOpen = !isOpen">
           <span />
           <span />
@@ -70,7 +71,8 @@ const menuGroups = [
       <NuxtLink to="/programs" @click="isOpen = false">Programs</NuxtLink>
       <NuxtLink to="/nexus" @click="isOpen = false">Nexus</NuxtLink>
       <NuxtLink to="/#capabilities" @click="isOpen = false">Capabilities</NuxtLink>
-      <NuxtLink to="/contact" @click="isOpen = false">Contact</NuxtLink>
+      <NuxtLink to="/partner-login" @click="isOpen = false">Partner login</NuxtLink>
+      <NuxtLink to="/connect-inquiry" @click="isOpen = false">Book a demo</NuxtLink>
     </div>
   </header>
 </template>

@@ -13,14 +13,15 @@
         <div>
           <h3>Company</h3>
           <NuxtLink to="/our-story">Our story</NuxtLink>
-          <NuxtLink to="/#science">Science</NuxtLink>
+          <NuxtLink to="/science">Science</NuxtLink>
           <NuxtLink to="/contact">Contact</NuxtLink>
         </div>
         <div>
           <h3>System</h3>
           <NuxtLink to="/programs">Aeonic Continuum</NuxtLink>
           <NuxtLink to="/nexus">Aeonic Nexus</NuxtLink>
-          <NuxtLink to="/#capabilities">Capabilities</NuxtLink>
+          <NuxtLink to="/partner-login">Partner login</NuxtLink>
+          <NuxtLink to="/connect-inquiry">Book a demo</NuxtLink>
         </div>
       </div>
     </div>

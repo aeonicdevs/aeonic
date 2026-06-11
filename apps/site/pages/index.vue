@@ -80,7 +80,7 @@ const capabilities = [
               software, and governance layer.
             </p>
             <div class="hero__actions">
-              <NuxtLink class="btn btn--primary" to="/contact">Book a demo</NuxtLink>
+              <NuxtLink class="btn btn--primary" to="/connect-inquiry">Book a demo</NuxtLink>
               <NuxtLink class="btn btn--secondary" to="#how-it-works">How it works</NuxtLink>
             </div>
           </div>
@@ -241,7 +241,7 @@ const capabilities = [
           <h2>Add Aeonic to your <em>practice</em>.</h2>
           <p>Plug the complete system into your clinic or brand, or launch a new one on it.</p>
           <div>
-            <NuxtLink class="btn btn--primary" to="/contact">Book a demo</NuxtLink>
+            <NuxtLink class="btn btn--primary" to="/connect-inquiry">Book a demo</NuxtLink>
             <NuxtLink class="btn btn--secondary" to="/nexus">See Nexus</NuxtLink>
           </div>
         </div>
