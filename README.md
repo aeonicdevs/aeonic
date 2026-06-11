@@ -4,8 +4,7 @@ This repo is split into:
 
 - `backend/` - FastAPI application
 - `apps/site/` - public marketing site
-- `apps/connect/` - business/operator platform for customer organizations
-- `apps/nexus/` - end-user app for patients and members
+- `apps/nexus/` - authenticated Aeonic Nexus app for patients, members, and provider-facing workflows
 
 Shared frontend packages can be added under `packages/` when there is enough
 shared UI, configuration, or API client code to justify them.
@@ -26,6 +25,24 @@ Health check:
 
 ```sh
 curl http://127.0.0.1:8000/health
+```
+
+## Marketing Site
+
+The public marketing site lives in `apps/site/` and is configured for Netlify in
+`netlify.toml`.
+
+Netlify build settings:
+
+- Base directory: `apps/site`
+- Build command: `npm run generate`
+- Publish directory: `.output/public`
+
+Run the same static build locally:
+
+```sh
+cd apps/site
+npm run generate
 ```
 
 ## Deployment

@@ -17,9 +17,11 @@ venv/
 # Frontend
 node_modules/
 dist/
+dist
 build/
 .next/
 .nuxt/
+.output/
 
 # IDEs
 .idea/
