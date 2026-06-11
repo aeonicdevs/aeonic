@@ -1,7 +1,7 @@
 [build]
   base = "apps/site"
-  command = "npm run generate"
-  publish = ".output/public"
+  command = "npm run generate:netlify"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "22"

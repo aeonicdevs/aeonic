@@ -6,6 +6,7 @@
     "dev": "nuxt dev --host 127.0.0.1",
     "build": "nuxt build",
     "generate": "nuxt generate",
+    "generate:netlify": "nuxt generate && node scripts/copy-static-output.mjs",
     "preview": "nuxt preview --host 127.0.0.1"
   },
   "dependencies": {

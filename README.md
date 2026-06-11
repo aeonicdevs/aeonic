@@ -35,14 +35,14 @@ The public marketing site lives in `apps/site/` and is configured for Netlify in
 Netlify build settings:
 
 - Base directory: `apps/site`
-- Build command: `npm run generate`
-- Publish directory: `.output/public`
+- Build command: `npm run generate:netlify`
+- Publish directory: `dist`
 
 Run the same static build locally:
 
 ```sh
 cd apps/site
-npm run generate
+npm run generate:netlify
 ```
 
 ## Deployment
