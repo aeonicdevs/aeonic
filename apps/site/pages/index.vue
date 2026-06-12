@@ -43,10 +43,10 @@ const platformCards = [
 
 const flow = [
   ['01', 'Codify', 'Protocols, biomarker ranges, contraindication checks, and dosing standards become executable clinical workflows.'],
-  ['02', 'Brand and deploy', 'Launch a white-labeled clinic program, DTC brand, or both with a coherent member experience.'],
-  ['03', 'Acquire and intake', 'Funnels and guided intake screen, consent, and route members before a provider review.'],
-  ['04', 'Prescribe', 'Licensed providers review, sign, and oversee treatment across the supported deployment model.'],
-  ['05', 'Engage and retain', 'Members return for labs, education, messaging, missions, refills, and protocol evolution.'],
+  ['02', 'Brand & deploy', 'Launch a white-labeled clinic program, DTC brand, or both with a coherent member experience.'],
+  ['03', 'Acquire & intake', 'Funnels and guided intake screen, consent, and route members before a provider review.'],
+  ['04', 'Prescribe — three ways', 'Licensed providers review, sign, and oversee treatment across the supported deployment model.'],
+  ['05', 'Engage & retain', 'Members return for labs, education, messaging, missions, refills, and protocol evolution.'],
   ['06', 'Scale', 'Add providers, locations, care lines, and brands while keeping one clinical standard.']
 ]
 
@@ -169,7 +169,7 @@ const capabilities = [
         </div>
       </section>
 
-      <section id="how-it-works" class="section section--band">
+      <section id="how-it-works" class="section section--how">
         <div class="container">
           <SectionHeader
             eyebrow="How it works"
