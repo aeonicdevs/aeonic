@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeonic Health — Shop the formulation catalog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Spectral:ital,wght@0,400;0,500;1,400;1,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;1,8..60,400&family=Libre+Caslon+Text:ital,wght@0,400;1,400&family=Hanken+Grotesk:wght@400;500;600;700&family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Mona+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="aeonic.css">
+<script src="aeonic.js"></script>
+<style>
+  .store-head { padding-top: clamp(28px,4vw,52px); padding-bottom: clamp(20px,2vw,28px); }
+  .crumb { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; color: var(--fg-3); display: flex; gap: 9px; align-items: center; }
+  .crumb a:hover { color: var(--accent-2); }
+  .crumb .sep { opacity: .5; }
+  .store-disc { margin-top: 22px; border: 1px dashed var(--line-2); border-radius: 6px; padding: 14px 18px; font-size: 13px; line-height: 1.55; color: var(--fg-2); max-width: 100%; }
+  .store-disc b { color: var(--fg); }
+
+  .store-layout { display: grid; grid-template-columns: 250px 1fr; gap: clamp(28px,4vw,56px); align-items: start; padding-bottom: clamp(64px,8vw,110px); }
+  @media (max-width: 880px){ .store-layout { grid-template-columns: 1fr; } }
+
+  .filters { position: sticky; top: 96px; display: flex; flex-direction: column; gap: 26px; }
+  @media (max-width: 880px){ .filters { position: static; } }
+  .fsearch { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 11px 14px; }
+  .fsearch input { background: none; border: 0; outline: none; color: var(--fg); font-family: var(--sans); font-size: 14px; width: 100%; }
+  .fsearch input::placeholder { color: var(--fg-3); }
+  .fsearch .ic { color: var(--fg-3); font-size: 14px; }
+  .fgroup .fg-title { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 12px; }
+  .fopt { display: flex; align-items: center; gap: 11px; padding: 8px 0; cursor: pointer; font-size: 14.5px; color: var(--fg-2); transition: color .18s; }
+  .fopt:hover { color: var(--fg); }
+  .fopt .box { width: 17px; height: 17px; border: 1px solid var(--line-2); border-radius: 4px; display: grid; place-items: center; flex: none; transition: background .18s, border-color .18s; }
+  .fopt input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .fopt input:checked + .box { background: var(--accent); border-color: var(--accent); }
+  .fopt input:checked + .box::after { content: ""; width: 9px; height: 5px; border-left: 1.5px solid var(--accent-ink); border-bottom: 1.5px solid var(--accent-ink); transform: rotate(-45deg); margin-top: -2px; }
+  .fopt input:checked ~ .lab { color: var(--fg); }
+  .fopt .lab { flex: 1; }
+  .fopt .cnt { font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
+
+  .store-toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .toolbar-actions { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+  .store-count { font-family: var(--mono); font-size: 12.5px; color: var(--fg-3); letter-spacing: .04em; }
+  .sortsel { margin-left: auto; display: flex; align-items: center; gap: 9px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 13px; }
+  .sortsel select { background: none; border: 0; outline: none; color: var(--fg); font-family: var(--sans); font-size: 13.5px; cursor: pointer; }
+  .sortsel select option { background: var(--panel-2); color: var(--fg); }
+  .sortsel .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
+
+  .active-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .fm-cta { display: inline-flex; align-items: center; gap: .6em; margin-top: 18px;
+    font-family: var(--sans); font-size: 14px; font-weight: 600; letter-spacing: -.01em;
+    color: var(--accent); background: var(--panel); border: 1px solid var(--line-2); border-radius: 100px;
+    padding: 12px 22px; transition: border-color .25s, color .25s, background .25s; }
+  .fm-cta:hover { border-color: var(--accent-line); color: var(--accent-2); background: var(--panel-2); }
+  .fm-cta .arw { transition: transform .25s cubic-bezier(.2,.7,.3,1); }
+  .fm-cta:hover .arw { transform: translateX(3px); }
+  .fchip { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--accent-2); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 100px; padding: 6px 13px; }
+  .fchip button { color: var(--accent-2); cursor: pointer; font-size: 13px; line-height: 1; }
+  .clear-all { font-family: var(--mono); font-size: 12px; color: var(--fg-3); cursor: pointer; }
+  .clear-all:hover { color: var(--accent-2); }
+
+  .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(14px,1.6vw,20px); }
+  @media (max-width: 1180px){ .shop-grid { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 520px){ .shop-grid { grid-template-columns: repeat(2,1fr); gap: 12px; } }
+  .product { position: relative; }
+  .pbadge { position: absolute; top: 12px; left: 12px; z-index: 2; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); padding: 4px 9px; border-radius: 100px; }
+  .pchips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
+  .pchip { font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; color: var(--fg-2); border: 1px solid var(--line-2); border-radius: 100px; padding: 4px 9px; }
+  .pchip--503 { color: var(--fg-3); border-color: var(--line-2); border-style: dashed; }
+  .pmore { font-family: var(--mono); font-size: 11px; color: var(--fg-3); }
+  .store-empty { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--fg-3); }
+  .store-empty .se-h { font-family: var(--serif); font-size: 24px; color: var(--fg-2); margin-bottom: 8px; }
+
+  /* product drilldown modal */
+  .pd-scrim { position: fixed; inset: 0; z-index: 200; background: rgba(8,7,5,.74); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; padding: clamp(14px,4vw,48px); overflow-y: auto; }
+  .pd-scrim.open { display: flex; }
+  .pd { position: relative; width: min(1040px,100%); background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,.6); max-height: 92vh; }
+  .pd-grid { display: grid; grid-template-columns: 1fr 1.12fr; max-height: 92vh; overflow-y: auto; }
+  @media (max-width: 760px){ .pd-grid { grid-template-columns: 1fr; } }
+  .pd-media { position: relative; background: var(--card); border-right: 1px solid var(--line); min-height: 360px; }
+  @media (max-width: 760px){ .pd-media { min-height: 280px; border-right: 0; border-bottom: 1px solid var(--line); } }
+  .pd-media .ph { position: absolute; inset: 0; border: 0; border-radius: 0; min-height: 0; }
+  .pd-media .pbadge { top: 16px; left: 16px; }
+  .pd-body { padding: clamp(24px,3vw,40px); }
+  .pd-close { position: absolute; top: 14px; right: 14px; z-index: 4; width: 38px; height: 38px; border-radius: 100px; background: var(--bg); border: 1px solid var(--line-2); color: var(--fg-2); font-size: 15px; cursor: pointer; transition: color .2s, border-color .2s; }
+  .pd-close:hover { color: var(--fg); border-color: var(--accent-line); }
+  .pd-name { font-family: var(--serif); font-size: clamp(28px,3vw,42px); line-height: 1.05; margin: 14px 0; }
+  .pd-qa { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 20px 0; }
+  .pd-qa .qa-h { font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .pd-qa p { color: var(--fg-2); font-size: 15px; line-height: 1.6; }
+  .pd-bullets { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 22px 0 16px; }
+  .pd-bullets li { display: flex; gap: 11px; font-size: 14.5px; color: var(--fg-2); line-height: 1.45; }
+  .pd-bullets li::before { content: "✓"; color: var(--accent); font-weight: 700; flex: none; }
+  .pd-avail { font-family: var(--mono); font-size: 12px; letter-spacing: .04em; color: var(--fg-3); margin-bottom: 16px; }
+  .pd-rule { height: 1px; background: var(--line); margin: 4px 0; }
+  .store-disclaimer { font-family: var(--mono); font-size: 10.5px; line-height: 1.65; letter-spacing: .01em; color: var(--fg-3); max-width: 88ch; margin-top: clamp(28px,4vw,44px); padding-top: 18px; border-top: 1px solid var(--line); }
+
+  /* ---- mobile: left-aligned title + horizontal chip filters (less vertical) ---- */
+  .filter-btn { display: none; }
+  .filters-head { display: none; }
+  .filters-scrim { position: fixed; inset: 0; z-index: 199; background: rgba(0,0,0,.55); opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s ease; }
+  .filters-scrim.show { opacity: 1; visibility: visible; }
+  body.filters-open .nav { opacity: 0 !important; visibility: hidden !important; transition: opacity .25s ease; }
+  @media (max-width: 880px){
+    .store-head { text-align: left; }
+    .store-head .lead { margin-inline: 0; }
+    /* Filters button sits next to Sort in the toolbar */
+    .filter-btn { display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--fg); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+    .sortsel { margin-left: 0; }
+    .filter-btn .fb-ic { font-size: 14px; color: var(--accent); }
+    /* the filter sidebar becomes an 85% drawer sliding from the left */
+    .filters { position: fixed; top: 0; left: 0; bottom: 0; width: 85%; max-width: 360px; z-index: 200;
+      background: var(--bg-deep); padding: 22px 22px 36px; overflow-y: auto; gap: 20px;
+      transform: translateX(-100%); transition: transform .4s cubic-bezier(.4,0,.1,1), visibility .4s; visibility: hidden; }
+    .filters.open { transform: translateX(0); visibility: visible; box-shadow: 24px 0 70px rgba(0,0,0,.55); }
+    .filters-head { display: flex; align-items: center; justify-content: space-between; }
+    .filters-head__t { font-family: var(--serif); font-size: 23px; color: var(--fg); }
+    .filters-close { width: 38px; height: 38px; flex: none; border: 1px solid var(--line-2); border-radius: 50%; background: none; color: var(--fg-2); font-size: 14px; cursor: pointer; }
+    .fgroup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .fgroup .fg-title { width: 100%; margin-bottom: 2px; }
+    .fopt { padding: 8px 14px; border: 1px solid var(--line-2); border-radius: 100px; gap: 7px; color: var(--fg); }
+    .fopt .box { display: none; }
+    .fopt .cnt { color: var(--fg-3); }
+    .fopt:has(input:checked) { background: var(--accent); border-color: var(--accent); }
+    .fopt:has(input:checked) .lab, .fopt:has(input:checked) .cnt { color: var(--accent-ink); }
+  }
+</style>
+</head>
+<body data-prop="health">
+
+<!-- NAV -->
+<header class="nav"><div class="wrap nav__in">
+  <a class="brand" href="aeonic-systems.html">
+    <span class="brand__mark"></span>
+    <span class="brand__word">Aeonic</span>
+    
+  </a>
+  <nav class="nav__links">
+    <div class="nav__item">
+      <span class="nav__trigger">Treatments <span class="car"></span></span>
+      <div class="nav__dd nav__dd--cols">
+        <div class="dd-head">What we treat</div>
+        <div class="dd-grid">
+          <a href="treatment-weight.html"><span class="dt">Weight management</span><span class="ds">Metabolic &amp; GLP-1</span></a>
+          <a href="treatment-sexual.html"><span class="dt">Sexual health</span><span class="ds">Libido &amp; function</span></a>
+          <a href="treatment-hormones.html"><span class="dt">Hormone optimization</span><span class="ds">HRT &amp; TRT</span></a>
+          <a href="treatment-cognitive.html"><span class="dt">Cognitive &amp; focus</span><span class="ds">Clarity &amp; recall</span></a>
+          <a href="treatment-peptides.html"><span class="dt">Peptide therapy</span><span class="ds">Recovery &amp; performance</span></a>
+          <a href="treatment-longevity.html"><span class="dt">Recovery &amp; longevity</span><span class="ds">Foundational protocols</span></a>
+        </div>
+        <div class="dd-rule"></div>
+        <a href="treatments.html"><span class="dt" style="color:var(--accent)">View all 12 treatments →</span></a>
+      </div>
+    </div>
+    <div class="nav__item">
+      <span class="nav__trigger">Programs <span class="car"></span></span>
+      <div class="nav__dd">
+        <div class="dd-head">The depth behind the protocols</div>
+        <a href="the-science.html"><span class="dt">The science</span><span class="ds">Root-cause, biomarker-driven medicine</span></a>
+        <a href="how-it-works.html"><span class="dt">How it works</span><span class="ds">Intake → labs → protocol → titration</span></a>
+        <a href="labs-biomarkers.html"><span class="dt">Labs &amp; biomarkers</span><span class="ds">The panels behind every protocol</span></a>
+        <a href="whats-included.html"><span class="dt">What's included</span><span class="ds">Meds, supplements, nutrition &amp; coaching</span></a>
+        <a href="faq.html"><span class="dt">FAQ</span><span class="ds">Answers before they ask</span></a>
+      </div>
+    </div>
+    <a href="aeonic-store.html">Catalog</a>
+  </nav>
+  <div class="nav__cta">
+    <div class="switch">
+      <a href="aeonic-systems.html">SYSTEM</a>
+      <a href="aeonic-health.html" aria-current="page">Programs</a>
+      <a href="aeonic-connect.html">Platform</a>
+    </div>
+    <a class="btn btn--ghost nav-getstarted" href="connect-inquiry.html">Get started</a>
+    <a class="btn btn--primary" href="aeonic-health-login.html">Member login</a>
+    <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</div></header>
+<div class="sheet">
+  <span class="sheet__label">Treatments</span>
+  <a href="treatments.html">All treatments</a>
+  <span class="sheet__label">Programs</span>
+  <a href="the-science.html">The science</a>
+  <a href="how-it-works.html">How it works</a>
+  <a href="labs-biomarkers.html">Labs &amp; biomarkers</a>
+  <a href="whats-included.html">What's included</a>
+  <a href="faq.html">FAQ</a>
+  <span class="sheet__label">Catalog</span>
+  <a href="aeonic-store.html">Shop all</a>
+  <a href="aeonic-health-login.html">Member login</a>
+  <div class="switch">
+    <a href="aeonic-systems.html">System</a>
+    <a href="aeonic-health.html" aria-current="page">Programs</a>
+    <a href="aeonic-connect.html">Platform</a>
+  </div>
+</div>
+
+<!-- HEAD -->
+<section class="store-head bleed"><div class="wrap">
+  <h1 class="disp" style="font-size:32px;margin-top:0">Catalog</h1>
+  <p style="margin-top:14px;max-width:74ch;font-size:13px;line-height:1.55;color:var(--fg-3)">These categories are organizational tools for use by licensed healthcare providers only. They do not constitute treatment recommendations, therapeutic claims, or indications for any compounded formulation. All prescribing decisions are made solely by independently licensed physicians through Aeonic's affiliated telehealth partner.</p>
+  <a class="fm-cta" href="aeonic-formulary-wiki.html">The Formulary Wiki <span class="arw" aria-hidden="true">→</span></a>
+</div></section>
+
+<!-- STORE -->
+<section class="bleed"><div class="wrap">
+  <div class="store-layout">
+    <!-- FILTERS -->
+    <aside class="filters" id="filtersPanel">
+      <div class="filters-head"><span class="filters-head__t">Filters</span><button class="filters-close" id="filtersClose" type="button" aria-label="Close">✕</button></div>
+      <div class="fsearch"><span class="ic">⌕</span><input id="storeSearch" type="text" placeholder="Search the catalog…"></div>
+      <div class="fgroup" id="fgroup-aud"><div class="fg-title">Audience</div></div>
+      <div class="fgroup" id="fgroup-cat"><div class="fg-title">Category</div></div>
+      <div class="fgroup" id="fgroup-type"><div class="fg-title">Type</div></div>
+      <div class="fgroup" id="fgroup-lab"><div class="fg-title">Programs</div></div>
+      <div class="fgroup" id="fgroup-form"><div class="fg-title">Dosage form</div></div>
+    </aside>
+
+    <!-- MAIN -->
+    <div>
+      <div class="store-toolbar">
+        <span class="store-count" id="storeCount">—</span>
+        <div class="toolbar-actions">
+          <button class="filter-btn" id="filterBtn" type="button"><span class="fb-ic">≡</span> Filters</button>
+          <div class="sortsel"><span class="lbl">Sort</span>
+          <select id="storeSort">
+            <option value="recommended">Recommended</option>
+            <option value="featured">Featured first</option>
+            <option value="az">Name · A–Z</option>
+            <option value="za">Name · Z–A</option>
+          </select>
+          </div>
+        </div>
+      </div>
+      <div class="active-bar" id="activeBar"></div>
+      <div class="shop-grid" id="shopGrid"></div>
+      <p class="store-disclaimer">These categories are organizational tools for use by licensed healthcare providers only. They do not constitute treatment recommendations, therapeutic claims, or indications for any compounded formulation. All prescribing decisions are made solely by independently licensed physicians through Aeonic's affiliated telehealth partner.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- FOOTER -->
+<footer class="footer"><div class="wrap">
+  <div class="footer__top">
+    <div>
+      <a class="brand" href="aeonic-health.html" style="margin-bottom:18px">
+        <span class="brand__mark"></span>
+        <span class="brand__word">Aeonic</span>
+        
+      </a>
+      <p class="footer__disc" style="max-width:34ch">Physician-guided precision longevity care — an ongoing protocol built around the patient’s labs and delivered to their door.</p>
+    </div>
+    <div>
+      <h4>Care lines</h4>
+      <ul>
+        <li><a href="treatment-weight.html">Weight management</a></li>
+        <li><a href="treatment-hormones.html">Hormone optimization</a></li>
+        <li><a href="treatment-peptides.html">Peptide therapy</a></li>
+        <li><a href="treatment-longevity.html">Recovery &amp; longevity</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>The program</h4>
+      <ul>
+        <li><a href="how-it-works.html">How it works</a></li>
+        <li><a href="aura-intelligence.html">Aura intelligence</a></li>
+        <li><a href="whats-included.html">What's included</a></li>
+        <li><a href="the-science.html">The science</a></li>
+        <li><a href="faq.html">FAQ</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Aeonic</h4>
+      <ul>
+        <li><a href="aeonic-systems.html">Health Systems</a></li>
+        <li><a href="aeonic-connect.html">For Providers</a></li>
+        <li><a href="connect-inquiry.html">Get started</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer__bottom">
+    <span class="kicker">© 2026 Aeonic Health</span>
+    <p class="footer__disc">Aeonic Health provides physician-overseen care. Prescriptions are written by licensed clinicians after review of intake and labs. This site is informational and not medical advice. Pricing shown is placeholder pending confirmation.</p>
+  </div>
+</div></footer>
+
+<script>
+(function () {
+  var PRODUCTS = [
+    { name: "Semaglutide", form: "Injection", cats: ["Metabolic"], aud: ["mens","womens"], featured: true, img: "assets/semaglutide.png" },
+    { name: "Tirzepatide", form: "Injection", cats: ["Metabolic"], aud: ["mens","womens"], featured: true, img: "assets/tirzepatide.png" },
+    { name: "BPC-157", form: "Injection", cats: ["Tissue Support","Performance"], aud: ["mens","womens"], img: "assets/bpc-157.png" },
+    { name: "TB-500", form: "Injection", cats: ["Tissue Support"], aud: ["mens","womens"], img: "assets/tb-500.png" },
+    { name: "CJC-1295 / Ipamorelin", form: "Injection", cats: ["Performance","Longevity"], aud: ["mens","womens"], featured: true, img: "assets/cjc-ipamorelin.png" },
+    { name: "Sermorelin", form: "Injection", cats: ["Performance"], aud: ["mens","womens"], img: "assets/sermorelin.png" },
+    { name: "Testosterone Cypionate", form: "Injection", cats: ["Hormone"], aud: ["mens"] },
+    { name: "Enclomiphene", form: "Capsule/Tablet", cats: ["Hormone"], aud: ["mens"] },
+    { name: "Estradiol + Progesterone", form: "Capsule/Tablet", cats: ["Hormone"], aud: ["womens"] },
+    { name: "NAD+", form: "Injection", cats: ["Cellular Health","Longevity"], aud: ["mens","womens"], featured: true, img: "assets/nad.png" },
+    { name: "NAD+ Nasal", form: "Nasal Spray", cats: ["Cellular Health"], aud: ["mens","womens"] },
+    { name: "Glutathione", form: "Injection", cats: ["Skin & Hair","Immune"], aud: ["mens","womens"], img: "assets/glutathione.png" },
+    { name: "GHK-Cu", form: "Topical", cats: ["Skin & Hair","Tissue Support"], aud: ["mens","womens"] },
+    { name: "Methylene Blue", form: "Capsule/Tablet", cats: ["Cognitive"], aud: ["mens","womens"] },
+    { name: "Thymosin Alpha-1", form: "Injection", cats: ["Immune"], aud: ["mens","womens"], img: "assets/thymosin-alpha-1.png" },
+    { name: "PT-141", form: "Nasal Spray", cats: ["Sexual Health"], aud: ["mens","womens"] },
+    { name: "Oxytocin", form: "Nasal Spray", cats: ["Sexual Health"], aud: ["mens","womens"] },
+    { name: "Rapamycin", form: "Capsule/Tablet", cats: ["Longevity"], aud: ["mens","womens"], featured: true },
+    { name: "Metformin", form: "Capsule/Tablet", cats: ["Longevity","Metabolic"], aud: ["mens","womens"] },
+    { name: "Selank", form: "Nasal Spray", cats: ["Cognitive","Immune"], aud: ["mens","womens"] },
+    { name: "AOD-9604", form: "Injection", cats: ["Metabolic","Performance"], aud: ["mens","womens"], img: "assets/aod-9604.png" },
+    { name: "MOTS-c", form: "Injection", cats: ["Metabolic","Cellular Health"], aud: ["mens","womens"], img: "assets/mots-c.png" },
+    { name: "Tesamorelin", form: "Injection", cats: ["Performance","Metabolic"], aud: ["mens","womens"], img: "assets/tesamorelin.png" },
+    { name: "IGF-1 LR3", form: "Injection", cats: ["Performance"], aud: ["mens","womens"], img: "assets/igf-1-lr3.png" },
+    { name: "Ibutamoren (MK-677)", form: "Capsule/Tablet", cats: ["Performance"], aud: ["mens","womens"] },
+    { name: "Epitalon", form: "Injection", cats: ["Longevity","Cellular Health"], aud: ["mens","womens"], img: "assets/epitalon.png" },
+    { name: "Gonadorelin", form: "Injection", cats: ["Hormone"], aud: ["mens","womens"], img: "assets/gonadorelin.png" },
+    { name: "Kisspeptin", form: "Injection", cats: ["Hormone","Sexual Health"], aud: ["mens","womens"], img: "assets/kisspeptin.png" },
+    { name: "DSIP", form: "Injection", cats: ["Cognitive"], aud: ["mens","womens"], img: "assets/dsip.png" },
+    { name: "Dihexa", form: "Capsule/Tablet", cats: ["Cognitive"], aud: ["mens","womens"] },
+    { name: "5-Amino-1MQ", form: "Capsule/Tablet", cats: ["Metabolic"], aud: ["mens","womens"] },
+    { name: "SLU-PP-332", form: "Capsule/Tablet", cats: ["Metabolic","Performance"], aud: ["mens","womens"] },
+    { name: "NMN", form: "Capsule/Tablet", cats: ["Longevity","Cellular Health"], aud: ["mens","womens"], sup: true, featured: true },
+    { name: "Resveratrol", form: "Capsule/Tablet", cats: ["Longevity"], aud: ["mens","womens"], sup: true },
+    { name: "CoQ10", form: "Capsule/Tablet", cats: ["Cellular Health"], aud: ["mens","womens"], sup: true },
+    { name: "Omega-3", form: "Capsule/Tablet", cats: ["Cognitive","Cellular Health"], aud: ["mens","womens"], sup: true, featured: true },
+    { name: "Vitamin D3 / K2", form: "Capsule/Tablet", cats: ["Immune"], aud: ["mens","womens"], sup: true },
+    { name: "Magnesium L-Threonate", form: "Capsule/Tablet", cats: ["Cognitive"], aud: ["mens","womens"], sup: true },
+    { name: "Collagen Peptides", form: "Capsule/Tablet", cats: ["Skin & Hair","Tissue Support"], aud: ["mens","womens"], sup: true },
+    { name: "L-Glutamine", form: "Capsule/Tablet", cats: ["Tissue Support"], aud: ["mens","womens"], sup: true },
+    { name: "Creatine", form: "Capsule/Tablet", cats: ["Performance"], aud: ["mens","womens"], sup: true },
+    { name: "Probiotic Complex", form: "Capsule/Tablet", cats: ["Tissue Support","Immune"], aud: ["mens","womens"], sup: true },
+    { name: "Glutathione (Oral)", form: "Capsule/Tablet", cats: ["Skin & Hair","Immune"], aud: ["mens","womens"], sup: true },
+    { name: "Zinc", form: "Capsule/Tablet", cats: ["Immune"], aud: ["mens","womens"], sup: true }
+  ];
+  var AUD = [["mens","Men's Health"],["womens","Women's Health"]];
+  var CATS = ["Performance","Tissue Support","Longevity","Metabolic","Cognitive","Hormone","Sexual Health","Immune","Cellular Health","Skin & Hair"];
+  var FORMS = ["Injection","Capsule/Tablet","Nasal Spray","Topical"];
+  var TYPES = [["rx","Prescription"],["sup","Supplement"]];
+
+  var state = { q: "", aud: new Set(), cat: new Set(), form: new Set(), type: new Set(), lab: false, sort: "recommended" };
+
+  // preset from URL
+  var params = new URLSearchParams(location.search);
+  if (params.get("aud")) state.aud.add(params.get("aud"));
+  if (params.get("cat")) state.cat.add(params.get("cat"));
+  if (params.get("type")) state.type.add(params.get("type"));
+  if (params.get("lab")) state.lab = true;
+
+  var $ = function (s, r) { return (r||document).querySelector(s); };
+  function countBy(predicate) { return PRODUCTS.filter(predicate).length; }
+
+  // build facet options
+  function opt(group, value, label, count, checked) {
+    var id = group + "-" + value.replace(/[^a-z0-9]/gi,"");
+    var l = document.createElement("label");
+    l.className = "fopt";
+    l.innerHTML = '<input type="checkbox" ' + (checked?"checked":"") + '><span class="box"></span><span class="lab">' + label + '</span><span class="cnt">' + count + '</span>';
+    l.querySelector("input").addEventListener("change", function (e) {
+      if (group === "lab") { state.lab = e.target.checked; render(); return; }
+      var set = state[group];
+      if (e.target.checked) set.add(value); else set.delete(value);
+      render();
+    });
+    return l;
+  }
+  AUD.forEach(function (a) { $("#fgroup-aud").appendChild(opt("aud", a[0], a[1], countBy(function(p){return p.aud.indexOf(a[0])>=0;}), state.aud.has(a[0]))); });
+  CATS.forEach(function (c) { $("#fgroup-cat").appendChild(opt("cat", c, c, countBy(function(p){return p.cats.indexOf(c)>=0;}), state.cat.has(c))); });
+  TYPES.forEach(function (t) { $("#fgroup-type").appendChild(opt("type", t[0], t[1], countBy(function(p){return (p.sup?"sup":"rx")===t[0];}), state.type.has(t[0]))); });
+  (function(){ var n=PRODUCTS.filter(function(p){return p.sup;}).length; var el=opt("lab","lab","Matched to your labs",n,state.lab); $("#fgroup-lab").appendChild(el); })();
+  FORMS.forEach(function (f) { $("#fgroup-form").appendChild(opt("form", f, f, countBy(function(p){return p.form===f;}), false)); });
+
+  $("#storeSearch").addEventListener("input", function (e) { state.q = e.target.value.toLowerCase().trim(); render(); });
+  $("#storeSort").addEventListener("change", function (e) { state.sort = e.target.value; render(); });
+
+  function matches(p) {
+    if (state.q && p.name.toLowerCase().indexOf(state.q) < 0) return false;
+    if (state.aud.size && !p.aud.some(function(a){return state.aud.has(a);})) return false;
+    if (state.cat.size && !p.cats.some(function(c){return state.cat.has(c);})) return false;
+    if (state.form.size && !state.form.has(p.form)) return false;
+    if (state.type.size && !state.type.has(p.sup?"sup":"rx")) return false;
+    if (state.lab && !p.sup) return false;
+    return true;
+  }
+  function sortList(list) {
+    var l = list.slice();
+    if (state.sort === "az") l.sort(function(a,b){return a.name.localeCompare(b.name);});
+    else if (state.sort === "za") l.sort(function(a,b){return b.name.localeCompare(a.name);});
+    else if (state.sort === "featured") l.sort(function(a,b){return (b.featured?1:0)-(a.featured?1:0);});
+    else l.sort(function(a,b){return (b.featured?1:0)-(a.featured?1:0);}); // recommended = featured-weighted
+    return l;
+  }
+  function card(p) {
+    var chips = '<span class="pchip">' + p.cats[0] + '</span>' + (p.cats.length>1 ? '<span class="pmore">+' + (p.cats.length-1) + ' more</span>' : '');
+    return '<article class="product" data-i="' + PRODUCTS.indexOf(p) + '" tabindex="0" role="button">' +
+      (p.img ? '<div class="pimg" style="aspect-ratio:4/5;border-bottom:1px solid var(--line);background:url(\''+p.img+'\') center/120% no-repeat #fff"></div>' : '<div class="ph pimg" style="aspect-ratio:4/5;min-height:0"><span class="ph-label">' + p.form + ' — vial</span></div>') +
+      '<div class="pbody"><span class="pcat">' + p.form + '</span><span class="pname">' + p.name + '</span>' +
+      '<div class="pchips">' + chips + '</div></div></article>';
+  }
+  function activeChips() {
+    var bar = $("#activeBar"); bar.innerHTML = "";
+    var items = [];
+    state.aud.forEach(function(v){ var lbl=(v==="mens"?"Men's Health":"Women's Health"); items.push(["aud",v,lbl]); });
+    state.cat.forEach(function(v){ items.push(["cat",v,v]); });
+    state.form.forEach(function(v){ items.push(["form",v,v]); });
+    state.type.forEach(function(v){ items.push(["type",v,(v==="rx"?"Prescription":"Supplement")]); });
+    if (!items.length) return;
+    items.forEach(function (it) {
+      var c = document.createElement("span"); c.className = "fchip";
+      c.innerHTML = it[2] + ' <button aria-label="Remove">✕</button>';
+      c.querySelector("button").addEventListener("click", function () {
+        state[it[0]].delete(it[1]);
+        // also uncheck the box
+        document.querySelectorAll('#fgroup-'+it[0]+' input').forEach(function(inp,i){});
+        syncChecks(); render();
+      });
+      bar.appendChild(c);
+    });
+    var clr = document.createElement("span"); clr.className = "clear-all"; clr.textContent = "Clear all";
+    clr.addEventListener("click", function () { state.aud.clear(); state.cat.clear(); state.form.clear(); state.type.clear(); state.lab = false; syncChecks(); render(); });
+    bar.appendChild(clr);
+  }
+  function syncChecks() {
+    [["aud",AUD.map(function(a){return a[0];})],["cat",CATS],["form",FORMS],["type",TYPES.map(function(t){return t[0];})]].forEach(function (g) {
+      var inputs = document.querySelectorAll('#fgroup-'+g[0]+' input');
+      g[1].forEach(function (val, i) { if (inputs[i]) inputs[i].checked = state[g[0]].has(val); });
+    });
+  }
+  function render() {
+    var list = sortList(PRODUCTS.filter(matches));
+    var grid = $("#shopGrid");
+    grid.innerHTML = list.length ? list.map(card).join("") : '<div class="store-empty"><div class="se-h">No formulations match those filters.</div><div>Try clearing a filter or adjusting your search.</div></div>';
+    $("#storeCount").textContent = list.length + " of " + PRODUCTS.length + " products";
+    activeChips();
+  }
+  syncChecks();
+  render();
+
+  // ---- product drilldown modal ----
+  function detailFor(p) {
+    var fw = p.form === "Injection" ? "injectable" : (p.form === "Nasal Spray" ? "intranasal" : (p.form === "Topical" ? "topical" : "oral"));
+    var qa = p.name + " is a clinician-formulated " + p.cats.join(" & ").toLowerCase() + " compound, prepared and dispensed by Aeonic\u2019s affiliated, FDA-regulated 503A compounding pharmacy network as " + fw + " therapy \u2014 only after a licensed clinician evaluates your intake, history, and labs.";
+    var bullets = [
+      "Compounded and dispensed through Aeonic\u2019s licensed, FDA-regulated 503A pharmacy network",
+      "Considered by clinicians for adults pursuing " + p.cats[0].toLowerCase() + " goals within a monitored protocol",
+      "Individual response varies \u2014 nothing here is a guarantee of outcome",
+      "Prescribed, dosed, and monitored by your licensed clinician"
+    ];
+    return { qa: qa, bullets: bullets };
+  }
+  var scrim = document.createElement("div");
+  scrim.className = "pd-scrim"; scrim.id = "pdScrim";
+  scrim.innerHTML = '<div class="pd"><button class="pd-close" aria-label="Close">\u2715</button><div class="pd-grid"></div></div>';
+  document.body.appendChild(scrim);
+  function openProduct(i) {
+    var p = PRODUCTS[i]; if (!p) return; var d = detailFor(p);
+    var chips = p.cats.map(function (c) { return '<span class="pchip">' + c + '</span>'; }).join("");
+    scrim.querySelector(".pd-grid").innerHTML =
+      '<div class="pd-media">' + (p.featured ? '<span class="pbadge">Featured</span>' : "") + (p.img ? '<div style="position:absolute;inset:0;background:url(\''+p.img+'\') center/contain no-repeat #fff"></div>' : '<div class="ph"><span class="ph-label">' + p.name + ' \u2014 vial</span></div>') + '</div>' +
+      '<div class="pd-body">' +
+        '<div class="crumb"><a href="aeonic-systems.html">Home</a><span class="sep">/</span><a href="aeonic-store.html">Catalog</a><span class="sep">/</span><span style="color:var(--fg-2)">' + p.name + '</span></div>' +
+        '<span class="pcat" style="display:block;margin-top:16px">' + p.form + '</span>' +
+        '<h2 class="pd-name">' + p.name + '</h2>' +
+        '<div class="pchips">' + chips + '</div>' +
+        '<div class="pd-qa"><div class="qa-h">Quick answer</div><p>' + d.qa + '</p></div>' +
+        '<div class="btn-row"><a class="btn btn--primary btn--lg" href="connect-inquiry.html">Get started <span class="arw">\u2192</span></a><a class="btn btn--ghost btn--lg" href="aeonic-formulary-wiki.html#'+p.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+'">Read the science</a></div>' +
+        '<ul class="pd-bullets">' + d.bullets.map(function (b) { return '<li>' + b + '</li>'; }).join("") + '</ul>' +
+        '<div class="pd-avail">' + (p.sup ? "Available now — recommended alongside your plan" : "Available after clinician evaluation") + '</div>' +
+        '<div class="pd-rule"></div>' +
+        '<p class="footer__disc" style="margin-top:16px">' + (p.sup ? "Dietary supplement. These statements have not been evaluated by the FDA. This product is not intended to diagnose, treat, cure, or prevent any disease." : "Educational information about a compounded formulation. Not FDA-approved for the prevention, treatment, or cure of any condition. Individual results vary; nothing here is a guarantee of outcome.") + '</p>' +
+      '</div>';
+    scrim.classList.add("open"); document.body.style.overflow = "hidden";
+  }
+  function closeProduct() { scrim.classList.remove("open"); document.body.style.overflow = ""; }
+  $("#shopGrid").addEventListener("click", function (e) {
+    var c = e.target.closest(".product"); if (c) openProduct(parseInt(c.getAttribute("data-i"), 10));
+  });
+  $("#shopGrid").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var c = e.target.closest(".product"); if (c) { e.preventDefault(); openProduct(parseInt(c.getAttribute("data-i"), 10)); }
+  });
+  scrim.addEventListener("click", function (e) { if (e.target === scrim || e.target.closest(".pd-close")) closeProduct(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeProduct(); });
+})();
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('filterBtn'), panel=document.getElementById('filtersPanel'), closeBtn=document.getElementById('filtersClose');
+  if(!btn||!panel) return;
+  var scrim=document.createElement('div'); scrim.className='filters-scrim'; (panel.parentNode||document.body).appendChild(scrim);
+  function open(){ panel.classList.add('open'); scrim.classList.add('show'); document.body.classList.add('filters-open'); document.body.style.overflow='hidden'; }
+  function close(){ panel.classList.remove('open'); scrim.classList.remove('show'); document.body.classList.remove('filters-open'); document.body.style.overflow=''; }
+  btn.addEventListener('click', open);
+  if(closeBtn) closeBtn.addEventListener('click', close);
+  scrim.addEventListener('click', close);
+})();
+</script>
+</body>
+</html>

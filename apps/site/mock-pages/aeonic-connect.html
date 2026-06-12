@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeonic Connect — The platform behind your practice. Not a website.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Spectral:ital,wght@0,400;0,500;1,400;1,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;1,8..60,400&family=Libre+Caslon+Text:ital,wght@0,400;1,400&family=Hanken+Grotesk:wght@400;500;600;700&family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Mona+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="aeonic.css">
+<script src="aeonic.js"></script>
+</head>
+<body data-prop="connect">
+
+<!-- NAV -->
+<header class="nav"><div class="wrap nav__in">
+  <a class="brand" href="aeonic-systems.html">
+    <span class="brand__mark"></span>
+    <span class="brand__word">Aeonic</span>
+    <span class="brand__tag">Connect</span>
+  </a>
+  <nav class="nav__links">
+    <div class="nav__item">
+      <span class="nav__trigger">Platform <span class="car"></span></span>
+      <div class="nav__dd nav__dd--wide">
+        <div class="dd-head">The clinical backend</div>
+        <a href="connect-platform-stack.html"><span class="dt">The platform stack</span><span class="ds">Every module — protocols, prescribing, pharmacy, compliance</span></a>
+        <a href="connect-technology.html"><span class="dt">The technology</span><span class="ds">Provider console + white-label patient portal</span></a>
+        <a href="connect-protocol-engine.html"><span class="dt">The protocol engine</span><span class="ds">Clinical logic, encoded in software</span></a>
+        <a href="connect-aura.html"><span class="dt">Aura · intelligence</span><span class="ds">The clinical co-pilot in your console</span></a>
+        <a href="connect-portal.html"><span class="dt">Your portal</span><span class="ds">Onboarding, protocols, support</span></a>
+        <a href="connect-academy.html"><span class="dt">Aeonic Academy</span><span class="ds">Certification, CE &amp; ongoing education</span></a>
+      </div>
+    </div>
+    <div class="nav__item">
+      <span class="nav__trigger">Plans <span class="car"></span></span>
+      <div class="nav__dd">
+        <div class="dd-head">Plans &amp; economics</div>
+        <a href="connect-pricing.html"><span class="dt">Pricing &amp; tiers</span><span class="ds">Foundation, Growth, Center of Excellence</span></a>
+        <a href="connect-integrations.html"><span class="dt">Integrations &amp; build-outs</span><span class="ds">Website, landing pages &amp; CRM setup</span></a>
+        <a href="connect-growth.html"><span class="dt">Growth</span><span class="ds">Retention &amp; paid acquisition</span></a>
+        <a href="connect-economics.html"><span class="dt">Practice economics</span><span class="ds">Recurring, cash-pay, high-retention</span></a>
+        <a href="connect-licensing.html"><span class="dt">Licensing</span><span class="ds">Run the whole system as your own brand</span></a>
+      </div>
+    </div>
+    <div class="nav__item">
+      <span class="nav__trigger">Model <span class="car"></span></span>
+      <div class="nav__dd nav__dd--wide">
+        <div class="dd-head">How it works</div>
+        <a href="connect-model.html"><span class="dt">One platform, three deployments</span><span class="ds">B2B, DTC &amp; licensing</span></a>
+        <a href="connect-provider-flexibility.html"><span class="dt">Provider flexibility</span><span class="ds">In-house or network prescribing</span></a>
+        <a href="connect-scale.html"><span class="dt">Built for scale</span><span class="ds">Multi-location, multi-provider, no break</span></a>
+      </div>
+    </div>
+    <a href="connect-inquiry.html">Become a partner</a>
+  </nav>
+  <div class="nav__cta">
+    <div class="switch">
+      <a href="aeonic-systems.html">System</a>
+      <a href="aeonic-health.html">Programs</a>
+      <a href="aeonic-connect.html" aria-current="page">Platform</a>
+    </div>
+    <a class="btn btn--ghost nav-getstarted" href="connect-inquiry.html">Get started</a>
+    <a class="btn btn--primary" href="aeonic-connect-login.html">Partner login</a>
+    <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</div></header>
+<div class="sheet">
+  <a href="#system">The System</a>
+  <a href="connect-platform-stack.html">Platform</a>
+  <a href="connect-integrations.html">Integrations</a>
+  <a href="connect-growth.html">Growth</a>
+  <a href="connect-pricing.html">Plans</a>
+  <a href="aeonic-connect-login.html">Partner login</a>
+  <div class="switch">
+    <a href="aeonic-systems.html">System</a>
+    <a href="aeonic-health.html">Programs</a>
+    <a href="aeonic-connect.html" aria-current="page">Platform</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero bleed has-bg hero--left"><div class="hero__bg"><img src="assets/hero-connect.avif" alt="" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block"></div><div class="hero__scrim"></div><div class="wrap">
+  <div class="hero__grid">
+    <div class="reveal">
+      <h1 class="disp" style="margin-top: 0; font-size:clamp(42px,7vw,65px)">The <em>clinical platform</em> for longevity practices.</h1>
+      <p class="lead lead--lg" style="margin-top:28px">Aeonic Connect is the Platform you plug into your practice or brand to run longevity — fully integrated, white-labeled, and live in weeks.</p>
+      <div class="stack gap-s mt-l">
+        <div class="btn-row btn-row--full">
+          <a class="btn btn--primary btn--lg" href="connect-inquiry.html">Become a partner <span class="arw">→</span></a>
+          <a class="btn btn--ghost btn--lg" href="connect-inquiry.html">Book a walkthrough <span class="arw">→</span></a>
+        </div>
+      </div>
+    </div>
+    <div class="hero__media reveal" data-d="2"></div>
+  </div>
+  <div class="hero-stats reveal" data-d="3">
+    <div class="hs"><b>Aeonic Connect</b><span>The platform behind the system</span></div>
+    <div class="hs"><b>One console</b><span>The whole program, one screen</span></div>
+    <div class="hs"><b>White-label</b><span>Your brand, end to end</span></div>
+  </div>
+</div></section>
+<!-- /hero -->
+
+<!-- CREDENTIAL STRIP -->
+<section class="section--tight bleed" style="border-bottom:1px solid var(--line)"><div class="wrap">
+  <div class="stat-row cols4 reveal">
+    <div class="stat"><div class="big">One <em>console</em></div><div class="lab">Run the entire program from one screen</div></div>
+    <div class="stat"><div class="big">50<em>-State</em></div><div class="lab">Compliance &amp; prescribing handled, state by state</div></div>
+    <div class="stat"><div class="big"><em>Integrated</em></div><div class="lab">Labs, pharmacy, e-prescribing &amp; payments, connected</div></div>
+    <div class="stat"><div class="big"><em>White</em>-label</div><div class="lab">Console &amp; patient portal, fully your brand</div></div>
+  </div>
+</div></section>
+
+<!-- TRUST -->
+<section class="section--tight bleed" style="border-bottom:1px solid var(--line)"><div class="wrap">
+  <div class="sec-head center reveal maxw-md">
+    <span class="eyebrow eyebrow--center">Trusted by clinics &amp; longevity leaders</span>
+    <h2 class="h-lg">Partnering with medical professionals <em>across the country</em>.</h2>
+    <p class="lead" style="margin-inline:auto">Delivering safe, effective regenerative therapies through licensed clinicians nationwide.</p>
+  </div>
+</div></section>
+
+<!-- THE MODEL -->
+<section class="section" id="model"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">One platform, three deployments</span>
+    <h2 class="h-xl" style="max-width:2100px">One platform, <em>run three ways</em>.</h2>
+    <p class="lead">The same orchestration engine powers all three deployment modes — which is what makes Aeonic a platform, not a service.</p>
+  </div>
+  <div class="ruledgrid ruledgrid--3 reveal">
+    <div class="rg-cell"><span class="rg-cell__k">B2B</span><h3>In your clinic</h3><p>Practices implement the system into their own clinic.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">DTC</span><h3>Direct to consumer</h3><p>Run a direct-to-consumer longevity brand on the same backend.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Licensing</span><h3>By license</h3><p>License the codified system to other operators.</p></div>
+  </div>
+</div></section>
+
+<!-- THE SYSTEM (6) -->
+<section class="section" id="system"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">The platform stack</span>
+    <h2 class="h-xl" style="max-width:1200px">Every module to run the program — <em>in one system</em>.</h2>
+  </div>
+  <div class="ruledgrid ruledgrid--3 reveal">
+    <div class="rg-cell"><span class="rg-cell__k">01</span><h3>Clinical protocol library</h3><p>Peptide therapeutics, hormone optimization, GLP-1 and metabolic, regenerative and recovery stacks — with dosing, titration, biomarker targets, and contraindication screening. 20+ years of refinement, updated quarterly.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">02</span><h3>Prescribing infrastructure</h3><p>White-labeled telehealth, e-prescribing, and a vetted network of FDA-regulated 503A &amp; 503B compounding and specialty pharmacies. Prescribe in-house or through the Aeonic physician network.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">03</span><h3>Certification &amp; education</h3><p>Structured certification pathways, CE-accredited modules, and ongoing clinical education so every provider practices to protocol standard.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">04</span><h3>Compliance &amp; governance</h3><p>Telehealth compliance, prescribing standards, consent and documentation frameworks, and state-by-state coverage — clinical decisions stay with licensed providers.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">05</span><h3>Patient acquisition engine</h3><p>Funnels, creative, and patient education engineered for functional-medicine conversion and retention.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">06</span><h3>Clinician-formulated formulary</h3><p>Peptides, injectables, and a supplement line — standardized protocols your practice offers and resells at its own margin.</p></div>
+  </div>
+</div></section>
+
+<!-- THE PLATFORM -->
+<section class="section band" id="platform"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:40px">
+    <span class="eyebrow eyebrow--center">The provider console</span>
+    <h2 class="h-xl">One console to run the <em>entire program</em>.</h2>
+    <p class="lead">Behind the protocols sits the software that operates the program day to day — branded to your practice, HIPAA-compliant, and built so a provider and a coordinator can run a full longevity panel without leaving one screen.</p>
+  </div>
+  <div class="reveal" style="margin-bottom:36px">
+    <div class="reveal" style="border:1px solid var(--line-2);border-radius:8px;overflow:hidden;background:#f5f3ec;aspect-ratio:16/9"><img src="assets/partner-console.png" alt="Aeonic Connect — provider console" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div>
+  </div>
+  <div class="ruledgrid ruledgrid--3 reveal">
+    <div class="rg-cell"><h3>Provider console</h3><p>A single dashboard for the whole program — active patients, protocols in flight, pending scripts, tasks, and revenue.</p></div>
+    <div class="rg-cell"><h3>Guided intake &amp; screening</h3><p>Branded patient intake with eligibility and contraindication screening and consent capture, so only appropriate patients reach a prescriber.</p></div>
+    <div class="rg-cell"><h3>Protocol engine</h3><p>Pick a protocol and the platform builds the dosing and titration schedule, sets biomarker targets, and flags interactions — the clinical IP, enforced in software.</p></div>
+    <div class="rg-cell"><h3>e-Prescribing &amp; pharmacy routing</h3><p>Prescribe in-house or route to the physician network; orders flow straight to the pharmacy and back as tracked fulfillment.</p></div>
+    <div class="rg-cell"><h3>Labs &amp; biomarker tracking</h3><p>Order panels, trend results over time, and trigger protocol adjustments — the longitudinal data that proves the program works.</p></div>
+    <div class="rg-cell"><h3>Billing, payments &amp; analytics</h3><p>Recurring program billing, cash-pay collection, and live reporting on panel size, retention, and revenue per provider.</p></div>
+  </div>
+  <div class="chips reveal mt-l">
+    <span class="chip">Web &amp; mobile</span>
+    <span class="chip">White-labeled end to end</span>
+    <span class="chip">Role-based access</span>
+    <span class="chip">Full audit trail</span>
+  </div>
+</div></section>
+
+<!-- CLINICAL SOFTWARE -->
+<section class="section" id="software"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Connect Clinical Software</span>
+    <h2 class="h-xl" style="max-width:1200px">Everything your clinic needs to run <em>protocol-based care</em>.</h2>
+    <p class="lead" style="margin-inline:auto">One system for the full lifecycle — intake, protocol design, appointments, prescribing, patient tracking, team coordination, and compliance.</p>
+  </div>
+  <div class="grid cols-3 cs-grid">
+    <div class="cs-card reveal" data-feat="f1"><div class="cs-card__media"><image-slot id="cs-img-1" shape="rect" fit="cover" src="assets/cs-intake-triage.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 01</span><h3>Intake &amp; Triage</h3><p class="cs-card__desc">Capture patient information and qualify them automatically.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f1">Learn More</button></div></div>
+    <div class="cs-card reveal" data-d="1" data-feat="f2"><div class="cs-card__media"><image-slot id="cs-img-2" shape="rect" fit="cover" src="assets/cs-protocol-design.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 02</span><h3>Protocol Design &amp; Templates</h3><p class="cs-card__desc">Build reusable protocol templates — or customize for each patient.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f2">Learn More</button></div></div>
+    <div class="cs-card reveal" data-d="2" data-feat="f3"><div class="cs-card__media"><image-slot id="cs-img-3" shape="rect" fit="cover" src="assets/cs-appointments.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 03</span><h3>Appointments &amp; Scheduling</h3><p class="cs-card__desc">Book in-person or telehealth appointments in one system.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f3">Learn More</button></div></div>
+    <div class="cs-card reveal" data-feat="f4"><div class="cs-card__media"><image-slot id="cs-img-4" shape="rect" fit="cover" src="assets/cs-team-collab.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 04</span><h3>Team Collaboration &amp; Tasks</h3><p class="cs-card__desc">Coordinate your team without endless back-and-forth messages.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f4">Learn More</button></div></div>
+    <div class="cs-card reveal" data-d="1" data-feat="f5"><div class="cs-card__media"><image-slot id="cs-img-5" shape="rect" fit="cover" src="assets/cs-prescribing.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 05</span><h3>Prescribing &amp; Pharmacy</h3><p class="cs-card__desc">Prescribe directly through Aeonic Connect and route to your pharmacy network.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f5">Learn More</button></div></div>
+    <div class="cs-card reveal" data-d="2" data-feat="f6"><div class="cs-card__media"><image-slot id="cs-img-6" shape="rect" fit="cover" src="assets/cs-patient-comm.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 06</span><h3>Patient Communication</h3><p class="cs-card__desc">Secure messaging, automated reminders, and check-in prompts.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f6">Learn More</button></div></div>
+    <div class="cs-card reveal" data-feat="f7"><div class="cs-card__media"><image-slot id="cs-img-7" shape="rect" fit="cover" src="assets/cs-protocol-tracking.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 07</span><h3>Protocol Tracking &amp; Progress</h3><p class="cs-card__desc">See where every patient is in their protocol at a glance.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f7">Learn More</button></div></div>
+    <div class="cs-card reveal" data-d="1" data-feat="f8"><div class="cs-card__media"><image-slot id="cs-img-8" shape="rect" fit="cover" src="assets/cs-compliance.png" placeholder="Drop image" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Feature 08</span><h3>Compliance &amp; Audit Trails</h3><p class="cs-card__desc">Every action is logged, timestamped, and traceable.</p><button class="btn btn--ghost cs-lm" type="button" data-open="f8">Learn More</button></div></div>
+  </div>
+</div></section>
+
+<!-- CLINICAL SOFTWARE — learn-more popup -->
+<div class="cs-modal" id="csModal" aria-hidden="true">
+  <div class="cs-modal__scrim" data-close></div>
+  <div class="cs-modal__card" role="dialog" aria-modal="true" aria-labelledby="csmTitle">
+    <button class="cs-modal__close" data-close aria-label="Close">✕</button>
+    <div class="cs-modal__media"><image-slot id="cs-modal-img" shape="rect" fit="cover" placeholder="Feature image" style="display:block;width:100%;height:100%"></image-slot></div>
+    <div class="cs-modal__body">
+      <span class="cs-modal__num" id="csmNum">Feature 01</span>
+      <h3 id="csmTitle">Intake &amp; Triage</h3>
+      <p class="cs-modal__lead" id="csmLead"></p>
+      <ul class="cs-modal__list" id="csmList"></ul>
+      <div class="btn-row" style="margin-top:26px"><a class="btn btn--primary" href="connect-inquiry.html">Book a walkthrough <span class="arw">→</span></a><a class="btn btn--ghost" href="connect-inquiry.html">Become a partner</a></div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var F = {
+    f1:{num:"Feature 01",title:"Intake &amp; Triage",img:"cs-img-1",lead:"Branded patient intake collects history, goals, and contraindications, then automatically scores eligibility — so only appropriate patients reach a prescriber.",bullets:["Custom, white-labeled intake forms","Eligibility &amp; contraindication screening","Consent capture built in","Auto-routing to the right provider"]},
+    f2:{num:"Feature 02",title:"Protocol Design &amp; Templates",img:"cs-img-2",lead:"Define dosing schedules, titration phases, and biomarker targets once — then reuse the template or tailor it per patient in a few clicks.",bullets:["Up-titration &amp; down-titration phases","Dosage, frequency &amp; duration","Target-maintenance &amp; ongoing plans","Blood-test &amp; lab scheduling"]},
+    f3:{num:"Feature 03",title:"Appointments &amp; Scheduling",img:"cs-img-3",lead:"Run in-person and telehealth visits from one calendar, with availability, booking, and reminders handled automatically.",bullets:["In-person &amp; telehealth in one place","Provider availability &amp; calendar sync","Automated appointment reminders","Rescheduling &amp; no-show handling"]},
+    f4:{num:"Feature 04",title:"Team Collaboration &amp; Tasks",img:"cs-img-4",lead:"Coordinate providers, coordinators, and pharmacy without endless back-and-forth — every hand-off is a tracked task.",bullets:["Shared task queues","Role-based assignments","Internal notes on every patient","Real-time status tracking"]},
+    f5:{num:"Feature 05",title:"Prescribing &amp; Pharmacy",img:"cs-img-5",lead:"Prescribe directly through Aeonic Connect and route scripts to your vetted network of FDA-regulated 503A &amp; 503B compounding and specialty pharmacies.",bullets:["Integrated e-prescribing","FDA-regulated 503A &amp; 503B compounding pharmacies","Auto-timed refills","End-to-end fulfillment tracking"]},
+    f6:{num:"Feature 06",title:"Patient Communication",img:"cs-img-6",lead:"Keep patients engaged between visits with secure messaging, automated reminders, and protocol-driven check-in prompts.",bullets:["HIPAA-secure messaging","Automated dose &amp; refill reminders","Protocol check-in prompts","Broadcast updates to cohorts"]},
+    f7:{num:"Feature 07",title:"Protocol Tracking &amp; Progress",img:"cs-img-7",lead:"See exactly where every patient sits in their protocol — adherence, current phase, and biomarker trends, all at a glance.",bullets:["Visual protocol timelines","Adherence tracking","Biomarker trends over time","Milestone &amp; review flags"]},
+    f8:{num:"Feature 08",title:"Compliance &amp; Audit Trails",img:"cs-img-8",lead:"Every action in the platform is logged, timestamped, and traceable — so you stay audit-ready, state by state.",bullets:["Complete, immutable audit log","Timestamped actions &amp; access","Role-based permissions","Exportable compliance records"]}
+  };
+  var modal = document.getElementById('csModal');
+  if(!modal) return;
+  var numEl=document.getElementById('csmNum'), titleEl=document.getElementById('csmTitle'), leadEl=document.getElementById('csmLead'), listEl=document.getElementById('csmList'), modalImg=document.getElementById('cs-modal-img');
+  var lastFocus=null;
+  function open(id){
+    var d=F[id]; if(!d) return;
+    numEl.innerHTML=d.num; titleEl.innerHTML=d.title; leadEl.innerHTML=d.lead;
+    listEl.innerHTML=d.bullets.map(function(b){return '<li>'+b+'</li>';}).join('');
+    // mirror the card's dropped image into the modal, if any
+    try {
+      var src=document.getElementById(d.img);
+      var got = src && (src.getAttribute('src') || (src.value||'') );
+      if(modalImg && got){ modalImg.setAttribute('src', got); }
+    } catch(e){}
+    modal.classList.add('open'); modal.setAttribute('aria-hidden','false');
+    document.body.style.overflow='hidden';
+  }
+  function close(){ modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+  document.querySelectorAll('[data-open]').forEach(function(b){ b.addEventListener('click', function(){ lastFocus=b; open(b.getAttribute('data-open')); }); });
+  modal.querySelectorAll('[data-close]').forEach(function(b){ b.addEventListener('click', close); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && modal.classList.contains('open')) close(); });
+})();
+</script>
+
+<!-- TECHNOLOGY -->
+<section class="section" id="technology"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">The technology</span>
+    <h2 class="h-xl" style="max-width:1040px">Two connected views — <em>both yours to brand</em>.</h2>
+    <p class="lead">One platform, two front doors that stay in sync: the provider console your team runs the program from, and the patient portal your patients live in. Both can be fully white-labeled — your domain, your logo, your experience — with a single source of truth behind them.</p>
+  </div>
+  <div class="grid cols-2" style="margin-bottom:22px">
+    <div class="card reveal">
+      <span class="num">What your team sees</span>
+      <h3 class="h-md">The provider console</h3>
+      <p>Active patients, protocols in flight, pending scripts, labs, tasks, and revenue — the whole program on one screen, with Aura drafting and flagging alongside.</p>
+      <div style="margin-top:18px;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;background:#f5f3ec;aspect-ratio:16/9"><img src="assets/partner-console.png" alt="Aeonic Connect — provider console" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div>
+    </div>
+    <div class="card reveal" data-d="1">
+      <span class="num">What your patients see</span>
+      <h3 class="h-md">The branded patient portal</h3>
+      <p>A polished, mobile-ready portal: their protocol, labs, shipments, messaging, store, and Aura — all under your brand, reflecting the clinical work your team does in the console.</p>
+      <div class="ph ph--wide" style="margin-top:18px"><span class="ph-label">Patient portal</span></div>
+    </div>
+  </div>
+  <div class="chips reveal">
+    <span class="chip">Fully white-labeled</span>
+    <span class="chip">One source of truth</span>
+    <span class="chip">HIPAA-compliant</span>
+    <span class="chip">SOC 2 practices</span>
+    <span class="chip">Role-based access &amp; audit trail</span>
+    <span class="chip">Labs, pharmacy &amp; Stripe integrations</span>
+  </div>
+</div></section>
+
+<!-- YOUR PORTAL -->
+<section class="section band" id="portal"><div class="wrap">
+  <div class="media-split flip" style="margin-bottom:8px">
+    <div class="ph ph--tall reveal"><span class="ph-label">Partner portal — dashboard</span></div>
+    <div class="reveal" data-d="1">
+      <span class="eyebrow">Your portal</span>
+      <h2 class="h-lg" style="margin-top:22px">One login, <em>everything in one place</em>.</h2>
+      <p class="lead" style="margin-top:24px">From the moment you sign in, every part of your program lives in one branded portal at your own address. New? It takes you straight into guided onboarding and setup. After that, it's your home base — no scattered files, no hunting.</p>
+    </div>
+  </div>
+  <div class="grid cols-3 reveal" style="margin-top:40px">
+    <div class="card card--soft"><span class="num">Guided onboarding</span><p>A step-by-step launch the moment you log in.</p></div>
+    <div class="card card--soft"><span class="num">Protocols &amp; literature</span><p>Every protocol, dosing reference, and form — always the current version.</p></div>
+    <div class="card card--soft"><span class="num">Aeonic Academy</span><p>Courses, webinars, and certification — your team stays ahead of the science.</p></div>
+    <div class="card card--soft"><span class="num">Compliance</span><p>Consent, SOPs, and your state posture — packaged and tracked.</p></div>
+    <div class="card card--soft"><span class="num">Support</span><p>Open a case or escalate a clinical question, any time.</p></div>
+    <div class="card card--soft"><span class="num">Updates &amp; success</span><p>New protocols, program updates, and your dedicated success manager.</p></div>
+  </div>
+</div></section>
+
+<!-- MEMBER FEATURES -->
+<section class="section" id="memberfeatures"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:44px">
+    <span class="eyebrow eyebrow--center">The patient portal</span>
+    <h2 class="h-xl">The patient portal your patients <em>live in</em>.</h2>
+    <p class="lead" style="margin-inline:auto">The other half of the split. Patients get full visibility into their care, progress, and biology — personalized through powerful intelligence and a beautifully simple experience.</p>
+  </div>
+
+  <!-- marquee feature rows with dashboard snapshots -->
+  <div class="media-split reveal" style="margin-bottom:clamp(40px,6vw,80px)">
+    <div>
+      <span class="eyebrow">01 · My Care</span>
+      <h3 class="h-lg" style="margin-top:18px">Every program, <em>one view</em>.</h3>
+      <p class="lead" style="margin-top:18px">Patients see all their active protocols, their combined daily stack, dosing schedule, and care team in one place — and explore new protocols they're eligible for, recommended from their labs.</p>
+      <div class="chips mt-l"><span class="chip">Active programs</span><span class="chip">Daily stack</span><span class="chip">Dosing calendar</span><span class="chip">Explore protocols</span></div>
+    </div>
+    <div style="border:1px solid var(--line-2);border-radius:10px;overflow:hidden;background:#f5f3ec;aspect-ratio:16/10"><img src="https://assets.cdn.filesafe.space/Ycadz1pKzic97dyeaRta/media/6a1dd126d53fc25488f1965e.png" alt="My Care dashboard" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div>
+  </div>
+
+  <div class="media-split flip reveal" style="margin-bottom:clamp(40px,6vw,80px)">
+    <div style="border:1px solid var(--line-2);border-radius:10px;overflow:hidden;background:#f5f3ec;aspect-ratio:16/10"><img src="https://assets.cdn.filesafe.space/Ycadz1pKzic97dyeaRta/media/6a1dd167045e32379f3f46c4.png" alt="Aura — your AI health companion" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div>
+    <div>
+      <span class="eyebrow">02 · Aura intelligence</span>
+      <h3 class="h-lg" style="margin-top:18px">Personalized <em>to every patient</em>.</h3>
+      <p class="lead" style="margin-top:18px">The patient's AI health companion reads their data, explains results in plain language, and recommends what to focus on this week — always reviewed against their care plan, with the clinical team behind it.</p>
+      <div class="chips mt-l"><span class="chip">Understands their labs</span><span class="chip">24/7 answers</span><span class="chip">Personal recommendations</span><span class="chip">Care-team backed</span></div>
+    </div>
+  </div>
+
+  <!-- feature cards with learn-more popup -->
+  <div class="grid cols-3 cs-grid mf-grid reveal">
+    <div class="cs-card" data-mf="mc"><div class="cs-card__media"><image-slot id="mf-img-c" shape="rect" fit="cover" src="https://assets.cdn.filesafe.space/Ycadz1pKzic97dyeaRta/media/6a1dd126d53fc25488f1965e.png" placeholder="My Care — drop screenshot" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">My Care</span><h3>Every program, one view</h3><p class="cs-card__desc">All their active protocols, daily stack, dosing schedule, and care team in one place — plus new protocols they're eligible for.</p><button class="btn btn--ghost cs-lm" type="button" data-open="mc">Learn More</button></div></div>
+    <div class="cs-card" data-mf="m1"><div class="cs-card__media"><image-slot id="mf-img-1" shape="rect" fit="cover" src="assets/mf-labs.png" placeholder="My Health — drop screenshot" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">My Health</span><h3>Labs that make sense</h3><p class="cs-card__desc">Biomarkers auto-digitized and trended, highlighted by protocol, with plain-language clinician summaries.</p><button class="btn btn--ghost cs-lm" type="button" data-open="m1">Learn More</button></div></div>
+    <div class="cs-card" data-mf="m2"><div class="cs-card__media"><image-slot id="mf-img-2" shape="rect" fit="cover" src="assets/mf-progress.png" placeholder="My Progress — drop screenshot" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">My Progress</span><h3>See it all add up</h3><p class="cs-card__desc">Weight, adherence, markers and milestones over any timeline — a clear analytics snapshot, exportable any time.</p><button class="btn btn--ghost cs-lm" type="button" data-open="m2">Learn More</button></div></div>
+    <div class="cs-card" data-mf="m4"><div class="cs-card__media"><image-slot id="mf-img-4" shape="rect" fit="cover" placeholder="Store — drop screenshot" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Store &amp; supplements</span><h3>Matched to your biology</h3><p class="cs-card__desc">Clinician-formulated medications and supplements, selected to their labs and shipped to their door.</p><button class="btn btn--ghost cs-lm" type="button" data-open="m4">Learn More</button></div></div>
+    <div class="cs-card" data-mf="m6"><div class="cs-card__media"><image-slot id="mf-img-6" shape="rect" fit="cover" src="assets/mf-messages.webp" placeholder="Messages — drop screenshot" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Messages &amp; care team</span><h3>Always reachable</h3><p class="cs-card__desc">Two channels — clinical questions to the care team, everything else to member support — with full history.</p><button class="btn btn--ghost cs-lm" type="button" data-open="m6">Learn More</button></div></div>
+    <div class="cs-card" data-mf="m3"><div class="cs-card__media"><image-slot id="mf-img-3" shape="rect" fit="cover" placeholder="Academy — drop screenshot" style="display:block;width:100%;height:100%"></image-slot></div><div class="cs-card__body"><span class="cs-card__num">Academy &amp; missions</span><h3>Learn, do, earn</h3><p class="cs-card__desc">Workouts, nutrition, recovery and courses tied to their protocols — complete missions and earn rewards.</p><button class="btn btn--ghost cs-lm" type="button" data-open="m3">Learn More</button></div></div>
+  </div>
+</div></section>
+
+<!-- MEMBER FEATURES — learn-more popup -->
+<div class="cs-modal" id="mfModal" aria-hidden="true">
+  <div class="cs-modal__scrim" data-close></div>
+  <div class="cs-modal__card" role="dialog" aria-modal="true" aria-labelledby="mfmTitle">
+    <button class="cs-modal__close" data-close aria-label="Close">✕</button>
+    <div class="cs-modal__media"><image-slot id="mf-modal-img" shape="rect" fit="cover" placeholder="Feature screenshot" style="display:block;width:100%;height:100%"></image-slot></div>
+    <div class="cs-modal__body">
+      <span class="cs-modal__num" id="mfmNum">My Health</span>
+      <h3 id="mfmTitle">Labs that make sense</h3>
+      <p class="cs-modal__lead" id="mfmLead"></p>
+      <ul class="cs-modal__list" id="mfmList"></ul>
+      <div class="btn-row" style="margin-top:26px"><a class="btn btn--primary" href="aeonic-health-login.html">Enter the portal <span class="arw">→</span></a><a class="btn btn--ghost" href="connect-inquiry.html">Get started</a></div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var F = {
+    mc:{num:"My Care",title:"Every program, one view",img:"mf-img-c",lead:"All of a patient's active protocols, combined daily stack, dosing schedule, and care team in one place — plus new protocols they're eligible for, recommended from their labs.",bullets:["All active programs at a glance","Combined daily stack","Dosing calendar &amp; reminders","Explore eligible protocols"]},
+    m1:{num:"My Health",title:"Labs that make sense",img:"mf-img-1",lead:"Every biomarker is auto-digitized and trended over time, highlighted by the protocol it relates to — with a plain-language clinician summary on every panel.",bullets:["Results auto-digitized from any lab","Trends over any timeline","Markers flagged by protocol","Clinician summaries in plain language"]},
+    m2:{num:"My Progress",title:"See it all add up",img:"mf-img-2",lead:"Weight, adherence, markers and milestones across any timeline — a clear analytics snapshot of how far the patient has come, exportable any time.",bullets:["Weight &amp; measurements","Adherence tracking","Milestones &amp; streaks","Exportable progress reports"]},
+    m3:{num:"Academy &amp; missions",title:"Learn, do, earn",img:"mf-img-3",lead:"Workouts, nutrition, recovery and courses tied to the patient's protocols — complete missions and earn rewards straight to their wallet.",bullets:["Protocol-linked courses","Guided workouts &amp; nutrition","Rewarded missions","Credit to their wallet"]},
+    m4:{num:"Store &amp; supplements",title:"Matched to their biology",img:"mf-img-4",lead:"Clinician-formulated medications and supplements, selected to the patient's labs and shipped to their door — reorder in a tap.",bullets:["Matched to their labs","Clinician-formulated","Auto-timed refills","Shipped to their door"]},
+    m6:{num:"Messages &amp; care team",title:"Always reachable",img:"mf-img-6",lead:"Two clear channels — clinical questions to the care team, everything else to member support — with full history, any time.",bullets:["Clinical care team channel","Member support channel","Full message history","Secure &amp; HIPAA-compliant"]}
+  };
+  var modal = document.getElementById('mfModal');
+  if(!modal) return;
+  var numEl=document.getElementById('mfmNum'), titleEl=document.getElementById('mfmTitle'), leadEl=document.getElementById('mfmLead'), listEl=document.getElementById('mfmList'), modalImg=document.getElementById('mf-modal-img');
+  function open(id){
+    var d=F[id]; if(!d) return;
+    numEl.innerHTML=d.num; titleEl.innerHTML=d.title; leadEl.innerHTML=d.lead;
+    listEl.innerHTML=d.bullets.map(function(b){return '<li>'+b+'</li>';}).join('');
+    try { var src=document.getElementById(d.img); var got=src&&(src.getAttribute('src')||src.value||''); if(modalImg&&got){ modalImg.setAttribute('src', got); } else if(modalImg){ modalImg.removeAttribute('src'); } } catch(e){}
+    modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden';
+  }
+  function close(){ modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+  document.querySelectorAll('.mf-grid [data-open]').forEach(function(b){ b.addEventListener('click', function(){ open(b.getAttribute('data-open')); }); });
+  modal.querySelectorAll('[data-close]').forEach(function(b){ b.addEventListener('click', close); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && modal.classList.contains('open')) close(); });
+})();
+</script>
+
+<!-- CLINICAL FOUNDATION -->
+<section class="section"><div class="wrap">
+  <div class="media-split">
+    <div class="reveal">
+      <span class="eyebrow">The protocol engine</span>
+      <h2 class="h-lg" style="margin-top:22px">The clinical logic, <em>encoded in software</em>.</h2>
+      <p class="lead" style="margin-top:24px">The platform ships loaded with Aeonic's protocol library — and the engine enforces it. Dosing, titration schedules, biomarker targets, stacking logic, and contraindication screening are built into the software, so every script a provider writes follows the standard automatically. Twenty years of protocol design, operationalized as code your team runs to standard.</p>
+      <div class="chips mt-l">
+        <span class="chip">Evidence-based protocols</span>
+        <span class="chip">Medical oversight</span>
+        <span class="chip">Continuously updated</span>
+      </div>
+    </div>
+    <div class="ph ph--tall reveal" data-d="1"><span class="ph-label">Dr. Lacey — clinic</span></div>
+  </div>
+  <div class="grid cols-4" style="margin-top:clamp(40px,5vw,64px)">
+    <div class="card reveal"><span class="num">Peptide therapeutics</span><p>Growth-hormone secretagogues, recovery and regenerative peptides — with evidence-based dosing, cycling, and safety screening.</p></div>
+    <div class="card reveal" data-d="1"><span class="num">Hormone &amp; metabolic</span><p>HRT / TRT, thyroid, and GLP-1 / metabolic protocols with lab-driven titration and ongoing monitoring.</p></div>
+    <div class="card reveal" data-d="2"><span class="num">Biomarker-led</span><p>Panel interpretation and protocol selection mapped to each patient's physiology — not a one-size template.</p></div>
+    <div class="card reveal" data-d="3"><span class="num">Clinical governance</span><p>Medical oversight, prescribing standards, consent and documentation built into every workflow.</p></div>
+  </div>
+</div></section>
+
+<!-- AURA (PROVIDER) -->
+<section class="section band" id="aura"><div class="wrap">
+  <div class="media-split">
+    <div class="reveal">
+      <span class="eyebrow">Aura · Intelligence</span>
+      <h2 class="h-lg" style="margin-top:22px">Aura is the <em>clinical co-pilot</em> in your console.</h2>
+      <p class="lead" style="margin-top:24px">Aura reads each patient's intake, labs, and history, drafts protocol options to the Aeonic standard, flags interactions and contraindications, and summarizes where every patient stands — so your providers move faster without cutting corners. Every suggestion is reviewed and signed by a licensed clinician.</p>
+      <div class="chips mt-l">
+        <span class="chip">Protocol drafts</span>
+        <span class="chip">Interaction &amp; contraindication flags</span>
+        <span class="chip">Patient summaries</span>
+        <span class="chip">Panel &amp; revenue insights</span>
+      </div>
+    </div>
+    <div class="reveal" data-d="1" style="aspect-ratio:16/10;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;background:#f5f3ec"><img src="assets/aura-clinical.png" alt="Aura — clinical copilot in the provider console" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div>
+  </div>
+</div></section>
+
+<!-- PROVIDER FLEXIBILITY -->
+<section class="section"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Provider flexibility</span>
+    <h2 class="h-xl" style="max-width:1200px">Prescribe in-house, or through our <em>physician network</em>.</h2>
+  </div>
+  <div class="doors">
+    <div class="door reveal">
+      <span class="door__k">Your provider, your license</span>
+      <span class="door__t">In-house <em>prescribing</em></span>
+      <p class="muted">Your licensed provider prescribes under your own practice. Aeonic supplies the protocols, platform, pharmacy network, and clinical oversight — you own the in-state clinical relationship end to end.</p>
+    </div>
+    <div class="door reveal" data-d="1">
+      <span class="door__k">The Aeonic physician network</span>
+      <span class="door__t">Network <em>prescribing</em></span>
+      <p class="muted">When your own provider can't write the script — state scope-of-practice rules, licensure level, or out-of-state patients — the credentialed Aeonic physician network prescribes on your behalf, so your practice can still run the full program.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- HOW IT WORKS -->
+<section class="section band"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">How it works</span>
+    <h2 class="h-xl" style="max-width:1200px">Four steps to a <em>live program</em>.</h2>
+  </div>
+  <div class="howflow reveal">
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">1</span><span class="howstep-ic howstep-ic--pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16" rx="2.5"></rect><path d="M9 4.5V3.6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.9"></path><path d="M8.5 12l2.2 2.2L15 10"></path></svg></span></div><h3 class="h-sm">Certify</h3><p>Your provider completes Aeonic certification; the protocol library and governance framework activate for your practice.</p></div>
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">2</span><span class="howstep-ic howstep-ic--float"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h7M16 7h3"></path><path d="M5 12h3M12 12h7"></path><path d="M5 17h9M18 17h1"></path><circle cx="14" cy="7" r="2"></circle><circle cx="10" cy="12" r="2"></circle><circle cx="16" cy="17" r="2"></circle></svg></span></div><h3 class="h-sm">Configure</h3><p>We stand up the white-labeled platform, intake, pharmacy connection, and your prescribing model — in-house, network, or both.</p></div>
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">3</span><span class="howstep-ic howstep-ic--float2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3h7L18 7.5V21H6.5z"></path><path d="M13 3v5h5"></path><path d="M9.5 13h5M9.5 16.5h3"></path></svg></span></div><h3 class="h-sm">Prescribe</h3><p>Patients are screened, matched to protocols, and prescribed through your branded clinical flow.</p></div>
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">4</span><span class="howstep-ic howstep-ic--spin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 0 1 14.4-6.1"></path><path d="M18 3.5v3.4h-3.4"></path><path d="M20.5 12a8.5 8.5 0 0 1-14.4 6.1"></path><path d="M6 20.5v-3.4h3.4"></path></svg></span></div><h3 class="h-sm">Scale</h3><p>The growth engine fills the program; add the network model to extend statewide and online.</p></div>
+  </div>
+</div></section>
+
+<!-- PLATFORM ACCESS / DEPLOYMENT removed per request -->
+
+<!-- BUILT FOR SCALE -->
+<section class="section" id="scale"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Built for scale</span>
+    <h2 class="h-xl" style="max-width:1200px">Precision care that <em>doesn't break at scale</em>.</h2>
+    <p class="lead">Start with one provider and one location — then grow. The system scales with you: add clinicians, open locations, and expand care lines without losing the standard. The protocols, compliance, education, and Aura that run one panel run a hundred, identically.</p>
+  </div>
+  <div class="ruledgrid ruledgrid--3 reveal">
+    <div class="rg-cell"><span class="rg-cell__k">Multi-location</span><h3>One system, every site</h3><p>Roll the program across locations on shared protocols and a single source of truth — each branded to its practice.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">More providers</span><h3>Onboard in days</h3><p>Add and certify clinicians through the Academy so every new provider practices to the same standard.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">More care lines</span><h3>Expand the menu</h3><p>Switch on new protocols — weight, hormones, peptides, longevity — without rebuilding anything.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Education &amp; Academy</span><h3>Training that scales</h3><p>Certification pathways and CE keep every provider and coordinator current as you grow.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Governance holds</span><h3>Compliance at any size</h3><p>State-by-state compliance, consent, and audit scale with the panel — the standard never slips.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Aura across the network</span><h3>Sharper as you grow</h3><p>The intelligence layer learns across more data, surfacing what works — under clinical governance.</p></div>
+  </div>
+</div></section>
+
+<!-- ACADEMY -->
+<section class="section"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Aeonic Academy</span>
+    <h2 class="h-xl" style="max-width:1200px">The system keeps evolving — <em>and your team with it</em>.</h2>
+    <p class="lead">Your subscription isn't a static license — it's a living system. Protocols, education, and procedures are maintained, updated, and pushed to the platform as the field moves, and clinical support scales from self-serve to one-on-one as your program grows.</p>
+  </div>
+  <div class="ruledgrid ruledgrid--3 reveal">
+    <div class="rg-cell"><span class="rg-cell__k">The Academy</span><h3>Certification &amp; CE</h3><p>Certification pathways, CE-accredited modules, annual recertification, and ongoing team training that keeps every provider current — and the program clinically defensible.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Living protocol support</span><h3>Never static</h3><p>New protocols and revisions pushed to the platform as they're refined, with case-level support so your team is never working from a static playbook.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Procedures &amp; SOPs</span><h3>Trainable, refreshed</h3><p>Clinical procedure training (injectables, IV, diagnostics) and operational SOPs for intake, documentation, and billing — standardized and refreshed with new rollouts.</p></div>
+  </div>
+</div></section>
+
+<!-- INTEGRATION & ONBOARDING -->
+<section class="section band"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Onboarding &amp; go-live</span>
+    <h2 class="h-xl">A seamless layer over <em>how you already operate</em>.</h2>
+  </div>
+  <div class="reveal">
+    <div class="feat">
+      <div><span class="num">Seamless integration</span></div>
+      <p>Aeonic layers onto your existing practice — your front desk, your patient base, your workflow. No rip-and-replace, no system to migrate off of.</p>
+    </div>
+    <div class="feat">
+      <div><span class="num">Fast onboarding</span></div>
+      <p>White-glove setup: we load the protocols, configure the platform, connect the pharmacy network, and stand up your funnels. Most practices go live in weeks, not quarters.</p>
+    </div>
+    <div class="feat">
+      <div><span class="num">Go-live support</span></div>
+      <p>Hands-on training for providers and staff, a structured launch playbook, and dedicated support after go-live so the program produces from the first month.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- INTEGRATIONS & BUILD-OUTS -->
+<section class="section" id="integrations"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Integrations &amp; build-outs</span>
+    <h2 class="h-xl">We build the front end — and wire up the <em>back</em>.</h2>
+    <p class="lead" style="margin-inline:auto">Beyond the platform, Aeonic builds and connects everything around it — so the longevity program launches complete, not as a pile of parts to assemble.</p>
+  </div>
+  <div class="ruledgrid ruledgrid--3 reveal">
+    <div class="rg-cell"><span class="rg-cell__k">Web &amp; landing pages</span><h3>Conversion-built, on your brand</h3><p>We design and build the website and campaign landing pages for the program — funnels engineered to convert, fully white-labeled to the practice.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Back-end CRM setup</span><h3>Stood up and supported</h3><p>We configure a HIPAA-compliant CRM for the program — patient pipelines, automations, and workflows wired in — with ongoing back-end support so it keeps running.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Platform integrations</span><h3>Connected end to end</h3><p>Labs, pharmacy, e-prescribing, and Stripe payments integrated into one system — no stitching tools together, no data living in five places.</p></div>
+  </div>
+</div></section>
+
+<!-- GROWTH -->
+<section class="section band" id="growth"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Growth</span>
+    <h2 class="h-xl">We help fill the program — <em>and keep it full</em>.</h2>
+    <p class="lead" style="margin-inline:auto">A fractional growth team that drives qualified patients in and keeps them on protocol — so the program produces recurring revenue, not one-off visits.</p>
+  </div>
+  <div class="ruledgrid ruledgrid--3 reveal">
+    <div class="rg-cell"><span class="rg-cell__k">Paid acquisition</span><h3>Qualified patients, by care line</h3><p>Managed paid media and creative that generate local, regional, and territory-level patient traffic for the care lines you want to grow — campaigns engineered per protocol, with territory protection.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Retention</span><h3>Keep patients on protocol</h3><p>Lifecycle messaging, re-engagement, and adherence programs that hold patients in care longer — protecting outcomes and recurring revenue alike.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">The growth engine</span><h3>A fractional growth team</h3><p>Strategy, creative, and media managed for you — a dedicated team running acquisition and retention so your staff stays focused on care.</p></div>
+  </div>
+</div></section>
+
+<!-- PROGRAMS / PRICING -->
+<section class="section" id="programs"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:14px">
+    <span class="eyebrow eyebrow--center">Programs</span>
+    <h2 class="h-xl" style="max-width:1200px">An initial license, then <em>ongoing program &amp; support</em>.</h2>
+    <p class="lead">Each tier is an initial license plus an ongoing subscription that scales your support, education, certification seats, and compliance coverage.</p>
+    <span class="note" style="margin-top:6px">Pricing is placeholder — confirm before publishing</span>
+  </div>
+  <div class="tiers reveal" style="margin-top:34px">
+    <div class="tier">
+      <span class="tier__name">Foundation</span>
+      <div class="tier__price">$699<small>/mo</small></div>
+      <ul>
+        <li>Core protocol library (peptides &amp; metabolic)</li>
+        <li>1 certified provider seat</li>
+        <li>In-house prescribing</li>
+        <li>Standard onboarding &amp; education</li>
+        <li>Core procedure SOPs</li>
+        <li>Quarterly protocol updates</li>
+        <li>Baseline compliance toolkit</li>
+        <li>Email support</li>
+      </ul>
+      <a class="btn btn--ghost" href="connect-inquiry.html">Start with Foundation</a>
+    </div>
+    <div class="tier featured">
+      <span class="tier__name">Growth · Most popular</span>
+      <div class="tier__price">$1,299<small>/mo</small></div>
+      <ul>
+        <li>Full library (incl. hormone &amp; regenerative)</li>
+        <li>Up to 3 provider seats</li>
+        <li>In-house + physician-network prescribing</li>
+        <li>Ongoing education + new protocol drops</li>
+        <li>In-office procedure training</li>
+        <li>Group clinical office hours</li>
+        <li>Full compliance coverage</li>
+        <li>Growth engine toolkit &amp; playbooks</li>
+      </ul>
+      <a class="btn btn--primary" href="connect-inquiry.html">Choose Growth</a>
+    </div>
+    <div class="tier">
+      <span class="tier__name">Center of Excellence</span>
+      <div class="tier__price">$2,999<small>/mo</small></div>
+      <ul>
+        <li>Complete library + early protocol access</li>
+        <li>Unlimited certifications</li>
+        <li>Full multi-state network prescribing</li>
+        <li>Advanced education + procedure rollouts</li>
+        <li>1:1 clinical escalation &amp; advanced training</li>
+        <li>Managed compliance &amp; governance</li>
+        <li>Managed growth engine (fractional team)</li>
+        <li>Dedicated success manager · co-branded marketing</li>
+      </ul>
+      <a class="btn btn--ghost" href="connect-inquiry.html">Talk to us</a>
+    </div>
+  </div>
+  <div class="reveal" style="margin-top:36px">
+    <h4 class="kicker" style="margin-bottom:14px">Add-ons</h4>
+    <div class="chips">
+      <span class="chip">Advanced Academy &amp; certifications</span>
+      <span class="chip">1:1 clinical escalation</span>
+      <span class="chip">Procedure training &amp; rollouts</span>
+      <span class="chip">Fractional marketing team</span>
+      <span class="chip">Front-end build + LegitScript</span>
+      <span class="chip">HIPAA CRM &amp; patient ops</span>
+      <span class="chip">Managed compliance &amp; governance</span>
+      <span class="chip">Dedicated success manager</span>
+    </div>
+  </div>
+</div></section>
+
+<!-- PRACTICE ECONOMICS -->
+<section class="section band"><div class="wrap">
+  <div class="sec-head center reveal maxw-md">
+    <span class="eyebrow eyebrow--center">Practice economics</span>
+    <h2 class="h-xl">A single program patient can be worth <em>thousands a year</em>.</h2>
+    <p class="lead" style="margin-inline:auto">Longevity patients are recurring, cash-pay, and high-retention. A modest panel transforms practice economics — and unlike chairs and equipment, it scales without more square footage.</p>
+    <span class="note" style="margin-top:4px">Figures are placeholder — confirm before publishing</span>
+    <div class="chips" style="justify-content:center;margin-top:22px">
+      <span class="chip">Higher patient lifetime value</span>
+      <span class="chip">Predictable monthly recurring revenue</span>
+      <span class="chip">Differentiation no competitor offers</span>
+    </div>
+  </div>
+</div></section>
+
+<!-- SCIENCE / AUTHORITY -->
+<section class="section band section--deep" id="science"><div class="wrap">
+  <div class="founder">
+    <div class="founder__aside reveal">
+      <div class="ph ph--tall"><span class="ph-label">Dr. Lacey — portrait (2016-Chittle-8)</span></div>
+      <div class="founder__id">
+        <div class="founder__name">Dr. Lacey</div>
+        <div class="founder__role">Founder &amp; Clinical Director · DPT</div>
+      </div>
+      <p class="founder__passion">An intense passion + nutrition intuition + a whole lot of school = Lacey.</p>
+    </div>
+    <div class="founder__body reveal" data-d="1">
+      <span class="eyebrow">The science &amp; authority</span>
+      <h2 class="h-lg" style="margin-top:18px">Two decades of clinical practice, <em>codified into a system</em>.</h2>
+      <p class="lead" style="margin-top:20px">Aeonic is the work of Dr. Lacey — a clinician, athlete, and lifelong student who spent more than twenty years connecting exercise science, nutrition, and functional medicine into root-cause protocols. The whole system is the codified product of that practice: every protocol developed in real patient care, every clinical decision made by a licensed provider, and the platform built to run it all to standard.</p>
+      <blockquote class="pullquote">Root-cause medicine, refined patient by patient over <em>twenty years</em> — then made repeatable, at scale.</blockquote>
+      <p class="measure muted">Her path runs from a Doctor of Physical Therapy and exercise-biology training, through clinical internships at Johns Hopkins and Rancho Los Amigos National Rehabilitation Center, to full certification with the Institute for Functional Medicine. That foundation is what every Aeonic protocol — and the practices who license them — ultimately rest on.</p>
+
+      <h3 class="founder__subhead">Credentials &amp; training</h3>
+      <ul class="cred-list">
+        <li class="cred-row"><span class="yr">2013–15</span><span class="what"><b>Certified Functional Medicine Specialist</b> — Institute for Functional Medicine (IFM)<span>Full Applying Functional Medicine in Clinical Practice (AFMCP) certification plus advanced practice modules.</span></span></li>
+        <li class="cred-row"><span class="yr">2009</span><span class="what"><b>Doctor of Physical Therapy (DPT)</b> — George Washington University</span></li>
+        <li class="cred-row"><span class="yr">2008–09</span><span class="what"><b>Clinical internships in neurology</b><span>Acute inpatient care, Johns Hopkins · Inpatient &amp; outpatient rehabilitation, Rancho Los Amigos National Rehabilitation Center.</span></span></li>
+        <li class="cred-row"><span class="yr">2004</span><span class="what"><b>BS, Exercise Biology</b> (emphasis: exercise nutrition) &amp; <b>BA</b> — UC Davis</span></li>
+        <li class="cred-row"><span class="yr">2000–now</span><span class="what"><b>Personal fitness trainer &amp; movement specialist</b><span>Two decades of hands-on work spanning Pilates, yoga, and rehabilitative exercise.</span></span></li>
+      </ul>
+
+      <h3 class="founder__subhead">Advanced functional-medicine focus areas</h3>
+      <div class="chips">
+        <span class="chip">Hormone &amp; HPA-T-G axis</span>
+        <span class="chip">Cardiometabolic</span>
+        <span class="chip">Gastrointestinal function</span>
+        <span class="chip">Immune &amp; chronic inflammation</span>
+        <span class="chip">Detoxification &amp; biotransformation</span>
+        <span class="chip">Energy, pain &amp; cognition</span>
+        <span class="chip">Methylation</span>
+        <span class="chip">Functional nutrition</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule" style="margin:clamp(48px,6vw,80px) 0 clamp(36px,4vw,56px)"></div>
+
+  <div class="sec-head center reveal" style="margin-bottom:36px">
+    <span class="eyebrow eyebrow--center">The team</span>
+    <h2 class="h-lg">A licensed team <em>behind the system</em>.</h2>
+    <p class="lead">Dr. Lacey sets the protocols; a team of licensed providers and clinical staff delivers, monitors, and governs them — directly for patients, and alongside the practices who run Aeonic.</p>
+  </div>
+  <div class="team reveal" data-d="1">
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Medical Director</div><div class="team__role">Clinical governance</div><p class="team__note">Owns prescribing standards, oversight, and protocol review.</p></div></div>
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Licensed Physicians</div><div class="team__role">Prescribing network</div><p class="team__note">Review intakes and labs; write and oversee every protocol.</p></div></div>
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Clinical Pharmacy</div><div class="team__role">Formulation &amp; fulfillment</div><p class="team__note">Vetted compounding &amp; specialty pharmacy partners.</p></div></div>
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Compliance Team</div><div class="team__role">Governance</div><p class="team__note">Telehealth, prescribing, and documentation, state by state.</p></div></div>
+  </div>
+  <p class="note" style="margin-top:24px">Team names &amp; photos are placeholders — send real bios and headshots to finalize.</p>
+</div></section>
+
+
+<!-- PARTNER FAQ -->
+<section class="section section--deep"><div class="wrap">
+  <div class="sec-head center reveal maxw-md" style="margin-bottom:44px">
+    <span class="eyebrow eyebrow--center">Partner FAQ</span>
+    <h2 class="h-xl">The questions practices <em>ask first</em>.</h2>
+  </div>
+  <div class="acc faq-num reveal" style="max-width:880px;margin-inline:auto">
+    <div class="acc__item"><button class="acc__q"><span class="acc__n">1</span><span class="acc__qt">Can we customize the platform for our specific protocols?</span><span class="pm"></span></button><div class="acc__a"><div>Yes. Aeonic Connect is built to be flexible — create custom protocol templates, adjust timelines, define check-in schedules, and tailor intake forms. If you need something highly specific, our team can build it with you.</div></div></div>
+    <div class="acc__item"><button class="acc__q"><span class="acc__n">2</span><span class="acc__qt">Do we have to switch from our current EMR?</span><span class="pm"></span></button><div class="acc__a"><div>Not necessarily. Some clinics run Aeonic Connect for their longevity and functional-medicine programs while keeping their existing EMR for insurance-based care. Others replace their EMR entirely — it depends on your practice mix.</div></div></div>
+    <div class="acc__item"><button class="acc__q"><span class="acc__n">3</span><span class="acc__qt">How long does implementation take?</span><span class="pm"></span></button><div class="acc__a"><div>Most clinics are up and running within 2–4 weeks. That includes onboarding, protocol-template setup, team training, and initial patient migration, with dedicated support throughout implementation.</div></div></div>
+    <div class="acc__item"><button class="acc__q"><span class="acc__n">4</span><span class="acc__qt">What if our pharmacy doesn’t integrate?</span><span class="pm"></span></button><div class="acc__a"><div>We work with a vetted network of FDA-regulated 503A &amp; 503B U.S. pharmacies. If your current pharmacy doesn’t integrate, we can connect you with one that does.</div></div></div>
+    <div class="acc__item"><button class="acc__q"><span class="acc__n">5</span><span class="acc__qt">Is the platform HIPAA compliant?</span><span class="pm"></span></button><div class="acc__a"><div>Yes. Aeonic Connect runs on HIPAA-compliant infrastructure with end-to-end encryption, secure messaging, role-based access controls, and automatic audit trails. We’re also working toward SOC 2 Type II certification.</div></div></div>
+  </div>
+</div></section>
+
+
+<!-- CLOSING CTA -->
+<section class="section section--deep" id="partner"><div class="wrap">
+  <div class="sec-head center reveal maxw-md" style="gap:28px">
+    <span class="eyebrow eyebrow--center">Become a partner</span>
+    <h2 class="disp" style="font-size:clamp(36px,5.2vw,72px)">Bring functional medicine <em>into your practice</em>.</h2>
+    <div class="btn-row" style="justify-content:center">
+      <a class="btn btn--primary btn--lg" href="connect-inquiry.html">Become a partner <span class="arw">→</span></a>
+      <a class="btn btn--ghost btn--lg" href="connect-inquiry.html">Book a walkthrough <span class="arw">→</span></a>
+    </div>
+  </div>
+</div></section>
+
+<!-- FOOTER -->
+<footer class="footer"><div class="wrap">
+  <div class="footer__top">
+    <div>
+      <a class="brand" href="aeonic-connect.html" style="margin-bottom:18px">
+        <span class="brand__mark"></span>
+        <span class="brand__word">Aeonic</span>
+        <span class="brand__tag">Connect</span>
+      </a>
+      <p class="footer__disc" style="max-width:34ch">The complete clinical backend to run precision performance &amp; longevity medicine as ongoing care in your own clinic — infrastructure, not a website.</p>
+    </div>
+    <div>
+      <h4>The system</h4>
+      <ul>
+        <li><a href="aeonic-connect.html#system">Protocol library</a></li>
+        <li><a href="aeonic-connect.html#platform">The platform</a></li>
+        <li><a href="aeonic-connect.html#portal">Your portal</a></li>
+        <li><a href="aeonic-connect.html#programs">Programs</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Program</h4>
+      <ul>
+        <li><a href="aeonic-connect.html#model">The model</a></li>
+        <li><a href="aeonic-connect.html#portal">Aeonic Academy</a></li>
+        <li><a href="aeonic-connect.html#programs">Pricing</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Aeonic</h4>
+      <ul>
+        <li><a href="aeonic-systems.html">Health Systems</a></li>
+        <li><a href="aeonic-health.html">For Humans</a></li>
+        <li><a href="connect-inquiry.html">Become a partner</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer__bottom">
+    <span class="kicker">© 2026 Aeonic Connect</span>
+    <p class="footer__disc">Aeonic Connect provides clinical infrastructure, protocols, and software to licensed practices. Clinical decisions and prescriptions remain with licensed providers. Pricing and economics shown are placeholder pending confirmation.</p>
+  </div>
+</div></footer>
+
+<!-- TWEAKS -->
+<div id="tweaks-root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="image-slot.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="aeonic-tweaks.jsx"></script>
+</body>
+</html>

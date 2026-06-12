@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeonic Health — Precision longevity medicine, as a deployable program</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Spectral:ital,wght@0,400;0,500;1,400;1,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;1,8..60,400&family=Libre+Caslon+Text:ital,wght@0,400;1,400&family=Hanken+Grotesk:wght@400;500;600;700&family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Mona+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="aeonic.css">
+<script src="aeonic.js"></script>
+</head>
+<body data-prop="health">
+
+<!-- NAV -->
+<header class="nav"><div class="wrap nav__in">
+  <a class="brand" href="aeonic-systems.html">
+    <span class="brand__mark"></span>
+    <span class="brand__word">Aeonic</span>
+    
+  </a>
+  <nav class="nav__links">
+    <div class="nav__item">
+      <span class="nav__trigger">Treatments <span class="car"></span></span>
+      <div class="nav__dd nav__dd--cols">
+        <div class="dd-head">What we treat</div>
+        <div class="dd-grid">
+          <a href="treatment-weight.html"><span class="dt">Weight management</span><span class="ds">Metabolic &amp; GLP-1</span></a>
+          <a href="treatment-sexual.html"><span class="dt">Sexual health</span><span class="ds">Libido &amp; function</span></a>
+          <a href="treatment-hormones.html"><span class="dt">Hormone optimization</span><span class="ds">HRT &amp; TRT</span></a>
+          <a href="treatment-cognitive.html"><span class="dt">Cognitive &amp; focus</span><span class="ds">Clarity &amp; recall</span></a>
+          <a href="treatment-peptides.html"><span class="dt">Peptide therapy</span><span class="ds">Recovery &amp; performance</span></a>
+          <a href="treatment-longevity.html"><span class="dt">Recovery &amp; longevity</span><span class="ds">Foundational protocols</span></a>
+        </div>
+        <div class="dd-rule"></div>
+        <a href="treatments.html"><span class="dt" style="color:var(--accent)">View all 12 treatments →</span></a>
+      </div>
+    </div>
+    <div class="nav__item">
+      <span class="nav__trigger">Programs <span class="car"></span></span>
+      <div class="nav__dd">
+        <div class="dd-head">The depth behind the protocols</div>
+        <a href="the-science.html"><span class="dt">The science</span><span class="ds">Root-cause, biomarker-driven medicine</span></a>
+        <a href="how-it-works.html"><span class="dt">How it works</span><span class="ds">Intake → labs → protocol → titration</span></a>
+        <a href="labs-biomarkers.html"><span class="dt">Labs &amp; biomarkers</span><span class="ds">The panels behind every protocol</span></a>
+        <a href="whats-included.html"><span class="dt">What's included</span><span class="ds">Meds, supplements, nutrition &amp; coaching</span></a>
+        <a href="faq.html"><span class="dt">FAQ</span><span class="ds">Answers before they ask</span></a>
+      </div>
+    </div>
+    <a href="aeonic-store.html">Catalog</a>
+  </nav>
+  <div class="nav__cta">
+    <div class="switch">
+      <a href="aeonic-systems.html">System</a>
+      <a href="aeonic-health.html" aria-current="page">Programs</a>
+      <a href="aeonic-connect.html">Platform</a>
+    </div>
+    <a class="btn btn--ghost nav-getstarted" href="connect-inquiry.html">Get started</a>
+    <a class="btn btn--primary" href="aeonic-health-login.html">Member login</a>
+    <button class="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</div></header>
+<div class="sheet">
+  <span class="sheet__label">Treatments</span>
+  <a href="treatments.html">All treatments</a>
+  <span class="sheet__label">Programs</span>
+  <a href="the-science.html">The science</a>
+  <a href="how-it-works.html">How it works</a>
+  <a href="labs-biomarkers.html">Labs &amp; biomarkers</a>
+  <a href="whats-included.html">What's included</a>
+  <a href="faq.html">FAQ</a>
+  <span class="sheet__label">Catalog</span>
+  <a href="aeonic-store.html">Shop all</a>
+  <a href="aeonic-health-login.html">Member login</a>
+  <div class="switch">
+    <a href="aeonic-systems.html">System</a>
+    <a href="aeonic-health.html" aria-current="page">Programs</a>
+    <a href="aeonic-connect.html">Platform</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero bleed has-bg hero--left"><div class="hero__bg"><image-slot id="hero-bg-health" shape="rect" fit="cover" src="assets/hero-health.webp" placeholder="Drop hero background image" style="padding:0;margin:0;border-radius:0;width:100%;height:100%"></image-slot></div><div class="hero__scrim"></div><button type="button" id="heroImgBtn" class="hero-img-btn">Change background</button><div class="wrap">
+  <div class="hero__grid">
+    <div class="reveal">
+      <h1 class="disp" style="margin-top:0;font-size:clamp(42px,7vw,65px)">The <em>complete program</em> for longevity medicine.</h1>
+      <p class="lead lead--lg" style="margin-top:28px">The Program — physician-led, lab-guided protocols for weight, hormones, performance, and recovery — deployed in-clinic or direct to patients.</p>
+      <div class="stack gap-s mt-l">
+        <div class="btn-row btn-row--full">
+          <a class="btn btn--primary btn--lg" href="connect-inquiry.html">Book a partner consult <span class="arw">→</span></a>
+          <a class="btn btn--ghost btn--lg" href="treatments.html">Explore programs <span class="arw">→</span></a>
+        </div>
+      </div>
+    </div>
+    <div class="hero__media reveal" data-d="2"></div>
+  </div>
+  <div class="hero-stats reveal" data-d="3">
+    <div class="hs"><b>Aeonic Health</b><span>The clinical program we deploy</span></div>
+    <div class="hs"><b>Physician-led</b><span>Licensed oversight</span></div>
+    <div class="hs"><b>Lab-guided</b><span>Built on their biology</span></div>
+  </div>
+</div></section>
+<!-- /hero -->
+
+<!-- CREDENTIAL STRIP -->
+<section class="section--tight bleed" style="border-bottom:1px solid var(--line)"><div class="wrap">
+  <div class="stat-row cols4 reveal">
+    <div class="stat"><div class="big"><em>Physician</em>-guided</div><div class="lab">Patient plans, overseen by a licensed doctor</div></div>
+    <div class="stat"><div class="big"><em>Biology</em>-first</div><div class="lab">Built on their biology — not guesswork</div></div>
+    <div class="stat"><div class="big">To their <em>door</em></div><div class="lab">Medications &amp; supplements delivered</div></div>
+    <div class="stat"><div class="big"><em>Always</em> on</div><div class="lab">Aura &amp; the care team, anytime</div></div>
+  </div>
+</div></section>
+
+<!-- LABS-LED EMPHASIS -->
+<section class="section--tight band bleed" style="border-bottom:1px solid var(--line)"><div class="wrap">
+  <div class="sec-head center reveal maxw-md">
+    <span class="eyebrow eyebrow--center">Built around the patient's labs</span>
+    <h2 class="h-lg">Every protocol — and every adjustment — starts with <em>the patient's bloodwork</em>.</h2>
+    <p class="lead" style="margin-inline:auto">No templates. No guesswork. Every patient is tested, their biomarkers read, and a plan built that's theirs alone — then re-tested and tuned over time. Custom care, measured: their labs decide what they take, how much, and when it changes.</p>
+  </div>
+</div></section>
+
+<!-- WHY A SYSTEM -->
+<section class="section"><div class="wrap">
+  <div class="sec-head center reveal maxw-md">
+    <span class="eyebrow eyebrow--center">Why a system</span>
+    <h2 class="h-xl">The body is a system. <em>Treat it like one.</em></h2>
+    <p class="lead" style="margin-inline:auto">Hormones, metabolism, recovery, sleep, and cognition aren't separate problems — they're one interconnected system, and pulling on one thread moves the rest. Most care treats symptoms in isolation. Aeonic treats the whole system: we read each patient's biomarkers, find what's actually driving how they feel, and adjust the inputs together. A system to care for a system.</p>
+  </div>
+</div></section>
+
+<!-- CARE LINES -->
+<section class="section" id="treat"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">The protocols we deploy</span>
+    <h2 class="h-xl">Our most-requested care lines, <em>protocol-built</em>.</h2>
+  </div>
+  <div class="carelines">
+    <a class="careline reveal" href="treatment-weight.html">
+      <div class="careline__media"><image-slot id="cl-weight" shape="rect" fit="cover" src="assets/glp-combo.png" placeholder="Weight management — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">01 — Weight management</span>
+      <h3 class="h-md">Metabolic &amp; GLP-1</h3>
+      <p>Protocols that work with the patient's physiology, not against it. Real medical guidance and a plan built to last.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="1" href="treatment-hormones.html">
+      <div class="careline__media"><image-slot id="cl-hormones" shape="rect" fit="cover" placeholder="Hormone optimization — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">02 — Hormone optimization</span>
+      <h3 class="h-md">HRT &amp; TRT</h3>
+      <p>Restore energy, drive, sleep, and strength. Hormone therapy guided by their labs and a licensed physician.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="2" href="treatment-peptides.html">
+      <div class="careline__media"><image-slot id="cl-peptides" shape="rect" fit="cover" src="assets/bpc-157.png" placeholder="Peptide therapy — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">03 — Peptide therapy</span>
+      <h3 class="h-md">Recovery &amp; performance</h3>
+      <p>Targeted peptides for recovery, performance, and healthy aging — prescribed and monitored, not guessed.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="3" href="treatment-longevity.html">
+      <div class="careline__media"><image-slot id="cl-longevity" shape="rect" fit="cover" placeholder="Recovery & longevity — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">04 — Recovery &amp; longevity</span>
+      <h3 class="h-md">Foundational protocols</h3>
+      <p>Recover faster, age slower, and stay sharp — built on their biomarkers, not trends.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" href="treatment-sexual.html">
+      <div class="careline__media"><image-slot id="cl-sexual" shape="rect" fit="cover" placeholder="Sexual health — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">05 — Sexual health</span>
+      <h3 class="h-md">Libido &amp; function</h3>
+      <p>Desire and performance restored at the cause — hormones, blood flow, and neurochemistry, for men and women.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="1" href="treatment-cognitive.html">
+      <div class="careline__media"><image-slot id="cl-cognitive" shape="rect" fit="cover" placeholder="Cognitive & focus — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">06 — Cognitive &amp; focus</span>
+      <h3 class="h-md">Clarity &amp; recall</h3>
+      <p>Sharper focus and mental energy with clinician-prescribed nootropic therapy and the nutrients the brain runs on.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="2" href="treatment-immune.html">
+      <div class="careline__media"><image-slot id="cl-immune" shape="rect" fit="cover" placeholder="Immune & resilience — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">07 — Immune &amp; resilience</span>
+      <h3 class="h-md">Defense &amp; recovery</h3>
+      <p>A trainable immune system — modulating peptides and antioxidant therapy on a corrected foundation.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="3" href="treatment-skin.html">
+      <div class="careline__media"><image-slot id="cl-skin" shape="rect" fit="cover" placeholder="Skin, hair & aesthetics — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">08 — Skin, hair &amp; aesthetics</span>
+      <h3 class="h-md">Inside-out aesthetics</h3>
+      <p>Skin and hair treated at the biology — collagen, circulation, and antioxidant status, with a structural foundation.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" href="treatment-sleep.html">
+      <div class="careline__media"><image-slot id="cl-sleep" shape="rect" fit="cover" placeholder="Sleep & stress — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">09 — Sleep &amp; stress</span>
+      <h3 class="h-md">Rest &amp; recovery</h3>
+      <p>Deeper sleep and lower stress at the physiology — circadian signaling, the HPA axis, and calming nutrients.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="1" href="treatment-gut.html">
+      <div class="careline__media"><image-slot id="cl-gut" shape="rect" fit="cover" placeholder="Gut health — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">10 — Gut health</span>
+      <h3 class="h-md">GI repair</h3>
+      <p>Calm an inflamed gut and rebuild the lining — repair peptides plus a targeted gut foundation.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="2" href="aeonic-store.html?cat=Cellular Health">
+      <div class="careline__media"><image-slot id="cl-energy" shape="rect" fit="cover" placeholder="Energy &amp; vitality — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">11 — Energy &amp; vitality</span>
+      <h3 class="h-md">NAD+ &amp; cellular</h3>
+      <p>Restore cellular energy and stamina — NAD+, mitochondrial and methylation support, dialed to their biomarkers.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+    <a class="careline reveal" data-d="3" href="aeonic-store.html?cat=Performance">
+      <div class="careline__media"><image-slot id="cl-performance" shape="rect" fit="cover" placeholder="Athletic performance — drop image" style="display:block;width:100%;height:100%"></image-slot></div>
+      <div class="careline__body"><span class="num">12 — Athletic performance</span>
+      <h3 class="h-md">Strength &amp; endurance</h3>
+      <p>Train harder and recover faster — performance peptides and recovery protocols matched to their goals and labs.</p>
+      <div class="mt-m"><span class="btn--link">Explore the program</span></div></div>
+    </a>
+  </div>
+  <div class="btn-row reveal" style="margin-top:38px;justify-content:center"><a class="btn btn--ghost btn--lg" href="treatments.html">View all 12 treatments <span class="arw">→</span></a></div>
+</div></section>
+
+<!-- THE SCIENCE -->
+<section class="section band" id="science"><div class="wrap">
+  <div class="media-split flip">
+    <div class="ph ph--tall reveal"><span class="ph-label">Biomarker dashboard</span></div>
+    <div class="reveal" data-d="1">
+      <span class="eyebrow">The science</span>
+      <h2 class="h-lg" style="margin-top:22px">Root cause, <em>not symptoms</em>.</h2>
+      <p class="lead" style="margin-top:24px">Most care treats the number on the chart. We treat the system underneath it — precision medicine that uses each patient's biomarkers to find what's actually driving how they feel, then applies protocols refined over 20 years of clinical practice. We measure, adjust, and keep optimizing their performance and healthspan.</p>
+      <div class="chips mt-l">
+        <span class="chip">Biomarker-driven</span>
+        <span class="chip">Physician-overseen</span>
+        <span class="chip">Continuously adjusted</span>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- HOW IT WORKS (process) -->
+<section class="section" id="how"><div class="wrap">
+  <div class="sec-head center reveal maxw-md" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">How the program works</span>
+    <h2 class="h-xl" style="max-width:1200px">Four steps from intake to a <em>running protocol</em>.</h2>
+    <p class="lead" style="margin-inline:auto">No clinic visits, no guesswork, nothing one-size-fits-all. Every step is guided by a licensed clinician and run from the patient's Aeonic app — and it doesn't end at the prescription.</p>
+  </div>
+  <div class="howflow reveal">
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">1</span><span class="howstep-ic howstep-ic--pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16" rx="2.5"></rect><path d="M9 4.5V3.6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.9"></path><path d="M8.5 12l2.2 2.2L15 10"></path></svg></span></div><h3 class="h-sm">Patient intake</h3><p>A quick online intake captures the patient's history, goals, and numbers — about ten minutes, from anywhere.</p></div>
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">2</span><span class="howstep-ic howstep-ic--float"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3h5"></path><path d="M10 3v5.2L5.6 16.5A2 2 0 0 0 7.4 19.5h9.2a2 2 0 0 0 1.8-3L14 8.2V3"></path><path d="M7.7 14.5h8.6"></path></svg></span></div><h3 class="h-sm">Labs &amp; physician review</h3><p>We order the right bloodwork; a licensed clinician reviews the patient's results and builds a plan around their physiology.</p></div>
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">3</span><span class="howstep-ic howstep-ic--float2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l8 4.3v9.8L12 21.2 4 16.9V7.1z"></path><path d="M4 7.1l8 4.3 8-4.3"></path><path d="M12 11.4v9.8"></path></svg></span></div><h3 class="h-sm">Delivered to the patient</h3><p>Each patient's personalized medication and supplement stack ships to their door, with a clear dose schedule and reminders.</p></div>
+    <div class="howstep2"><div class="howstep2__top"><span class="howstep2__n">4</span><span class="howstep-ic howstep-ic--spin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 0 1 14.4-6.1"></path><path d="M18 3.5v3.4h-3.4"></path><path d="M20.5 12a8.5 8.5 0 0 1-14.4 6.1"></path><path d="M6 20.5v-3.4h3.4"></path></svg></span></div><h3 class="h-sm">Ongoing, adjusted care</h3><p>Progress and labs are tracked and the protocol titrated over time — clinician and Aura, with the patient the whole way.</p></div>
+  </div>
+  <div class="btn-row reveal" style="justify-content:center;margin-top:40px"><a class="btn btn--primary btn--lg" href="connect-inquiry.html">Book a partner consult <span class="arw">→</span></a></div>
+</div></section>
+
+<!-- PROGRAM INCLUDES -->
+<section class="section band" id="includes"><div class="wrap">
+  <div class="sec-head center reveal" style="margin-bottom:48px">
+    <span class="eyebrow eyebrow--center">Inside the program</span>
+    <h2 class="h-xl" style="max-width:1200px">The program is <em>more than a prescription</em>.</h2>
+    <p class="lead">Medication is one input. Real results come from a complete protocol — supplements matched to the patient's biology, the daily habits around them, and intelligence keeping it all on track. It's ongoing care, not a one-time script.</p>
+  </div>
+  <div class="ruledgrid ruledgrid--4 reveal">
+    <div class="rg-cell"><span class="rg-cell__k">Matched supplements</span><h3>Tuned to their labs</h3><p>The same clinician-formulated supplements in the patient's portal — selected and dosed to their biomarkers, not guessed, and adjusted as their labs move.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Nutrition &amp; recipes</span><h3>Eating that fits the plan</h3><p>Digital nutrition programs and recipe libraries built around each protocol and goal — so food works with the medicine, not against it.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Training &amp; movement</span><h3>Workouts that protect results</h3><p>Guided workout and movement programs that protect lean mass and amplify the protocol, scaled to where the patient is.</p></div>
+    <div class="rg-cell"><span class="rg-cell__k">Aura &amp; the care team</span><h3>Guidance that never sleeps</h3><p>Aura answers questions and keeps patients on track around the clock, with a human care team behind every adjustment.</p></div>
+  </div>
+  <div class="btn-row mt-l reveal"><a class="btn--link" href="aeonic-store.html?type=sup">Browse matched supplements →</a></div>
+</div></section>
+
+<!-- STORE -->
+<section class="section band" id="store"><div class="wrap">
+  <div class="grid cols-2 reveal" style="align-items:end;margin-bottom:44px">
+    <div class="sec-head">
+      <span class="eyebrow">The store · by clinical area</span>
+      <h2 class="h-xl" style="max-width:1200px">Browse by <em>clinical area</em>.</h2>
+    </div>
+    <div class="stack gap-m">
+      <p class="lead">Browse the full catalog of physician-prescribed therapies and clinician-formulated supplements. Prescription medications are compounded by licensed, FDA-regulated 503A pharmacies, and unlock only after the patient's consult and labs — so what they receive is always right for them.</p>
+      <div class="btn-row"><a class="btn btn--ghost btn--lg" href="#start">Start intake to unlock <span class="arw">→</span></a></div>
+    </div>
+  </div>
+  <div class="store-grid reveal">
+    <a class="product" href="treatment-weight.html"><div class="pimg" style="aspect-ratio:4/3;border-bottom:1px solid var(--line);background:url('assets/semaglutide.png') center/contain no-repeat #fff"></div><div class="pbody"><span class="pcat">Semaglutide · Tirzepatide</span><span class="pname">Metabolic &amp; GLP-1</span><p class="pdesc">Physician-guided weight loss that works with the patient's physiology.</p><div class="pfoot"><span class="ptag">Rx</span><span class="prx">503A compounded · physician-prescribed</span></div></div></a>
+    <a class="product" href="treatment-peptides.html"><div class="pimg" style="aspect-ratio:4/3;border-bottom:1px solid var(--line);background:url('assets/bpc-157.png') center/contain no-repeat #fff"></div><div class="pbody"><span class="pcat">BPC-157</span><span class="pname">Tissue &amp; recovery</span><p class="pdesc">Targeted peptide therapy for recovery and tissue repair.</p><div class="pfoot"><span class="ptag">Rx</span><span class="prx">503A compounded · physician-prescribed</span></div></div></a>
+    <a class="product" href="treatment-hormones.html"><div class="ph pimg"><span class="ph-label">Testosterone · TRT</span></div><div class="pbody"><span class="pcat">Testosterone · TRT</span><span class="pname">Hormones</span><p class="pdesc">Hormone optimization guided by labs and a physician.</p><div class="pfoot"><span class="ptag">Rx</span><span class="prx">503A compounded · physician-prescribed</span></div></div></a>
+    <a class="product" href="treatment-longevity.html"><div class="ph pimg"><span class="ph-label">NAD+</span></div><div class="pbody"><span class="pcat">NAD+</span><span class="pname">Cellular &amp; longevity</span><p class="pdesc">Cellular energy and longevity support, injectable or IV.</p><div class="pfoot"><span class="ptag">Rx</span><span class="prx">503A compounded · physician-prescribed</span></div></div></a>
+    <a class="product" href="treatment-peptides.html"><div class="ph pimg"><span class="ph-label">Sermorelin</span></div><div class="pbody"><span class="pcat">Sermorelin</span><span class="pname">Performance</span><p class="pdesc">Growth-hormone secretagogue for performance and recovery.</p><div class="pfoot"><span class="ptag">Rx</span><span class="prx">503A compounded · physician-prescribed</span></div></div></a>
+    <a class="product" href="treatment-cognitive.html"><div class="ph pimg"><span class="ph-label">Methylene Blue</span></div><div class="pbody"><span class="pcat">Methylene Blue</span><span class="pname">Cognitive &amp; focus</span><p class="pdesc">Mitochondrial and cognitive support, pharmaceutical grade.</p><div class="pfoot"><span class="ptag">Rx</span><span class="prx">503A compounded · physician-prescribed</span></div></div></a>
+    <a class="product" href="treatment-immune.html"><div class="ph pimg"><span class="ph-label">Thymosin Alpha-1</span></div><div class="pbody"><span class="pcat">Thymosin Alpha-1</span><span class="pname">Immune &amp; resilience</span><p class="pdesc">Immune-modulating peptide for resilience and recovery.</p><div class="pfoot"><span class="ptag">Rx</span><span class="prx">503A compounded · physician-prescribed</span></div></div></a>
+    <a class="product" href="treatment-skin.html"><div class="ph pimg"><span class="ph-label">Glutathione</span></div><div class="pbody"><span class="pcat">Glutathione</span><span class="pname">Skin &amp; hair</span><p class="pdesc">Master-antioxidant support for skin, detox, and recovery.</p><div class="pfoot"><span class="ptag ptag--sup">Supplement</span><span class="prx">No Rx needed</span></div></div></a>
+  </div>
+  <p class="note" style="margin-top:24px">Product names are representative — confirm the live formulary before publishing. All prescriptions require a consult with a licensed clinician.</p>
+</div></section>
+
+<!-- AUTHORITY / DR LACEY -->
+<section class="section band section--deep" id="founder"><div class="wrap">
+  <div class="founder">
+    <div class="founder__aside reveal">
+      <div class="ph ph--tall"><span class="ph-label">Dr. Lacey — portrait (2016-Chittle-8)</span></div>
+      <div class="founder__id">
+        <div class="founder__name">Dr. Lacey</div>
+        <div class="founder__role">Founder &amp; Clinical Director · DPT</div>
+      </div>
+      <p class="founder__passion">An intense passion + nutrition intuition + a whole lot of school = Lacey.</p>
+    </div>
+    <div class="founder__body reveal" data-d="1">
+      <span class="eyebrow">The clinical foundation</span>
+      <h2 class="h-lg" style="margin-top:18px">Twenty years of clinical practice <em>behind every protocol</em>.</h2>
+      <p class="lead" style="margin-top:20px">Aeonic exists because of how Dr. Lacey practices. A clinician, athlete, and lifelong student, she has spent more than two decades connecting exercise science, nutrition, and functional medicine into protocols that treat the root cause — not the symptom. The plan built for each patient isn't improvised; it's the codified product of that work.</p>
+      <blockquote class="pullquote">Root-cause medicine, refined patient by patient over <em>twenty years</em> — then made repeatable.</blockquote>
+      <p class="measure muted">Her path runs from a Doctor of Physical Therapy and exercise-biology training, through clinical internships at Johns Hopkins and Rancho Los Amigos National Rehabilitation Center, to full certification with the Institute for Functional Medicine. Every protocol — and the licensed-provider oversight behind it — traces back to that foundation.</p>
+
+      <h3 class="founder__subhead">Credentials &amp; training</h3>
+      <ul class="cred-list">
+        <li class="cred-row"><span class="yr">2013–15</span><span class="what"><b>Certified Functional Medicine Specialist</b> — Institute for Functional Medicine (IFM)<span>Full Applying Functional Medicine in Clinical Practice (AFMCP) certification plus advanced practice modules.</span></span></li>
+        <li class="cred-row"><span class="yr">2009</span><span class="what"><b>Doctor of Physical Therapy (DPT)</b> — George Washington University</span></li>
+        <li class="cred-row"><span class="yr">2008–09</span><span class="what"><b>Clinical internships in neurology</b><span>Acute inpatient care, Johns Hopkins · Inpatient &amp; outpatient rehabilitation, Rancho Los Amigos National Rehabilitation Center.</span></span></li>
+        <li class="cred-row"><span class="yr">2004</span><span class="what"><b>BS, Exercise Biology</b> (emphasis: exercise nutrition) &amp; <b>BA</b> — UC Davis</span></li>
+        <li class="cred-row"><span class="yr">2000–now</span><span class="what"><b>Personal fitness trainer &amp; movement specialist</b><span>Two decades of hands-on work spanning Pilates, yoga, and rehabilitative exercise.</span></span></li>
+      </ul>
+
+      <h3 class="founder__subhead">Advanced functional-medicine focus areas</h3>
+      <div class="chips">
+        <span class="chip">Hormone &amp; HPA-T-G axis</span>
+        <span class="chip">Cardiometabolic</span>
+        <span class="chip">Gastrointestinal function</span>
+        <span class="chip">Immune &amp; chronic inflammation</span>
+        <span class="chip">Detoxification &amp; biotransformation</span>
+        <span class="chip">Energy, pain &amp; cognition</span>
+        <span class="chip">Methylation</span>
+        <span class="chip">Functional nutrition</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule" style="margin:clamp(48px,6vw,80px) 0 clamp(36px,4vw,56px)"></div>
+
+  <div class="sec-head reveal" style="margin-bottom:36px">
+    <span class="eyebrow">The care team</span>
+    <h2 class="h-lg">Behind every plan, a <em>licensed care team</em>.</h2>
+    <p class="lead">Dr. Lacey set the protocols — and a team of licensed providers and coaches delivers and monitors them. Every prescription is written by a licensed clinician.</p>
+  </div>
+  <div class="team reveal" data-d="1">
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Licensed Physician</div><div class="team__role">Prescribing clinician</div><p class="team__note">Reviews the patient's intake and labs; writes and oversees their protocol.</p></div></div>
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Nurse Practitioner</div><div class="team__role">Clinical care</div><p class="team__note">Manages titration, refills, and check-ins between visits.</p></div></div>
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Health Coach</div><div class="team__role">Ongoing support</div><p class="team__note">Keeps the patient's plan on track with nutrition, training, and habits.</p></div></div>
+    <div class="team__member"><div class="ph team__photo"><span class="ph-label">Team — portrait</span></div><div><div class="team__name">Care Coordinator</div><div class="team__role">Logistics</div><p class="team__note">Handles scheduling, pharmacy, and shipments end to end.</p></div></div>
+  </div>
+  <p class="note" style="margin-top:24px">Team names &amp; photos are placeholders — send real bios and headshots to finalize.</p>
+</div></section>
+
+<!-- MEMBERSHIP / GET STARTED -->
+<section class="section section--deep" id="start"><div class="wrap">
+  <div class="sec-head center reveal maxw-md" style="margin-bottom:32px">
+    <span class="eyebrow eyebrow--center">Get started</span>
+    <h2 class="h-xl" style="max-width:1200px">An ongoing program, <em>built around each patient</em> — not one-and-done.</h2>
+    <p class="lead">It starts with a consult and labs — but it doesn't stop there. Transparent pricing, no insurance games, and a living protocol that's the patient's own: monitored, refined, and re-dosed as their biomarkers move.</p>
+    <div class="btn-row mt-s">
+      <a class="btn btn--primary btn--lg" href="connect-inquiry.html">Talk to our team <span class="arw">→</span></a>
+      <span class="note">Pricing placeholder — confirm before publishing</span>
+    </div>
+  </div>
+</div></section>
+
+<!-- FAQ -->
+<section class="section band section--deep" id="faq"><div class="wrap">
+  <div class="grid cols-2" style="align-items:start;gap:clamp(28px,5vw,72px)">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Common questions</span>
+      <h2 class="h-lg">Answers, <em>before they ask</em>.</h2>
+      <p class="lead">Everything is overseen by licensed physicians. If a question isn't here, a conversation is the best place to start.</p>
+    </div>
+    <div class="acc reveal" data-d="1">
+      <div class="acc__item">
+        <button class="acc__q">Is this safe and legitimate? <span class="pm"></span></button>
+        <div class="acc__a"><div>Every protocol is overseen by licensed physicians, and prescriptions are written by a clinician after reviewing the patient's intake and labs.</div></div>
+      </div>
+      <div class="acc__item">
+        <button class="acc__q">Who prescribes the medication? <span class="pm"></span></button>
+        <div class="acc__a"><div>A licensed physician — either evaluating the patient's case directly or through our credentialed network, depending on their state.</div></div>
+      </div>
+      <div class="acc__item">
+        <button class="acc__q">Do patients need bloodwork? <span class="pm"></span></button>
+        <div class="acc__a"><div>For most protocols, yes. Labs are how we build a plan that's actually right for the patient, and how we track their progress.</div></div>
+      </div>
+      <div class="acc__item">
+        <button class="acc__q">What gets shipped to the patient? <span class="pm"></span></button>
+        <div class="acc__a"><div>Their prescribed medications and any supplements in the protocol, delivered discreetly with clear instructions.</div></div>
+      </div>
+      <div class="acc__item">
+        <button class="acc__q">Can patients cancel anytime? <span class="pm"></span></button>
+        <div class="acc__a"><div>Yes. Membership is theirs to manage, anytime.</div></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- CLOSING CTA -->
+<section class="section section--deep"><div class="wrap">
+  <div class="sec-head center reveal maxw-md" style="gap:28px">
+    <span class="eyebrow eyebrow--center">Begin</span>
+    <h2 class="disp" style="font-size:clamp(36px,5.2vw,72px)">Healthspan starts with <em>a conversation</em>.</h2>
+    <p class="lead" style="margin-inline:auto">Patients share their goals, get their labs, and start a protocol the care team keeps optimizing — visit after visit, not just once.</p>
+    <div class="btn-row" style="justify-content:center">
+      <a class="btn btn--primary btn--lg" href="connect-inquiry.html">Book a partner consult <span class="arw">→</span></a>
+    </div>
+  </div>
+</div></section>
+
+<!-- FOOTER -->
+<footer class="footer"><div class="wrap">
+  <div class="footer__top">
+    <div>
+      <a class="brand" href="aeonic-health.html" style="margin-bottom:18px">
+        <span class="brand__mark"></span>
+        <span class="brand__word">Aeonic</span>
+        
+      </a>
+      <p class="footer__disc" style="max-width:34ch">Physician-guided precision longevity care — an ongoing protocol built around the patient's labs and delivered to their door.</p>
+    </div>
+    <div>
+      <h4>Care lines</h4>
+      <ul>
+        <li><a href="treatment-weight.html">Weight management</a></li>
+        <li><a href="treatment-hormones.html">Hormone optimization</a></li>
+        <li><a href="treatment-peptides.html">Peptide therapy</a></li>
+        <li><a href="treatment-longevity.html">Recovery &amp; longevity</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>The program</h4>
+      <ul>
+        <li><a href="how-it-works.html">How it works</a></li>
+        <li><a href="aura-intelligence.html">Aura intelligence</a></li>
+        <li><a href="whats-included.html">What's included</a></li>
+        <li><a href="the-science.html">The science</a></li>
+        <li><a href="faq.html">FAQ</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Aeonic</h4>
+      <ul>
+        <li><a href="aeonic-systems.html">Health Systems</a></li>
+        <li><a href="aeonic-connect.html">For Providers</a></li>
+        <li><a href="connect-inquiry.html">Get started</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer__bottom">
+    <span class="kicker">© 2026 Aeonic Health</span>
+    <p class="footer__disc">Aeonic Health provides physician-overseen care. Prescriptions are written by licensed clinicians after review of intake and labs. This site is informational and not medical advice. Pricing shown is placeholder pending confirmation.</p>
+  </div>
+</div></footer>
+
+<!-- TWEAKS -->
+<div id="tweaks-root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="image-slot.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="aeonic-tweaks.jsx"></script>
+</body>
+</html>

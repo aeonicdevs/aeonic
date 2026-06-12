@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeonic Connect — Partner login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Spectral:ital,wght@0,400;0,500;1,400;1,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;1,8..60,400&family=Libre+Caslon+Text:ital,wght@0,400;1,400&family=Hanken+Grotesk:wght@400;500;600;700&family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Mona+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="aeonic.css">
+<script src="aeonic.js"></script>
+</head>
+<body data-prop="connect">
+<main class="auth">
+
+  <!-- BRAND ASIDE -->
+
+  <!-- FORM COLUMN -->
+  <section class="auth__main">
+    <div class="auth__bar">
+      <a class="brand" href="aeonic-systems.html"><span class="brand__mark"></span><span class="brand__word">Aeonic</span><span class="brand__tag">Connect</span></a>
+      <span class="eyebrow">Partner portal</span>
+    </div>
+    <div class="auth__body">
+      <div class="auth__card">
+        <span class="eyebrow">Partner portal</span>
+        <h1 class="h-lg" style="margin-top:18px">Sign in to your practice.</h1>
+        <p class="muted" style="margin-top:10px">Access your protocols, provider console, Academy, compliance, and program analytics.</p>
+
+        <form class="auth-form" data-cta="Sign in" data-go="app-connect-v2.html?enter=clinic">
+          <div class="field">
+            <label for="email">Work email</label>
+            <input class="input" id="email" type="email" placeholder="you@yourpractice.com" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="pw">Password</label>
+            <input class="input" id="pw" type="password" placeholder="••••••••••" autocomplete="current-password" required>
+          </div>
+          <div class="row-between">
+            <label class="check"><input type="checkbox" checked><span class="box"></span>Keep me signed in</label>
+            <a class="link-sm" href="#">Forgot password?</a>
+          </div>
+          <button class="btn btn--primary btn--lg btn--block" type="submit" style="margin-top:24px">Sign in</button>
+          <div class="auth__note">Demo sign-in — drops you straight into the provider console dashboard.</div>
+        </form>
+
+        <div class="auth__alt">
+          <span>Not a partner yet? <a href="aeonic-connect.html#partner">Become a partner →</a></span>
+          <span>Looking for member access? <a href="aeonic-health-login.html">Member login →</a></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>
