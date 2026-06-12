@@ -123,7 +123,10 @@
     motion: 'lively', rhythm: 'subtle', heroDark: 0.5,
     serif:  "'Helvetica Neue', Helvetica, Arial, sans-serif",
     serif2: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-    sans:   "'Mona Sans', system-ui, sans-serif"
+    sans:   "'Mona Sans', system-ui, sans-serif",
+    heroBtnBg: '#9a604c',
+    heroBtnFg: '#ffffff',
+    heroBtn2: '#ffffff'
   };
   try {
     var saved = JSON.parse(localStorage.getItem(STORE) || 'null');

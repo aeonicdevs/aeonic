@@ -273,3 +273,74 @@ useSeoMeta({
     </main>
   </div>
 </template>
+
+<style>
+.mock-home .hero {
+  display: flex;
+  min-height: clamp(760px, 100vh, 1100px);
+  margin: calc(-1 * (70px + 40px)) 0 0;
+  overflow: visible;
+  padding-top: calc(clamp(128px, 13vw, 220px) + 86px);
+  padding-bottom: clamp(64px, 9vw, 128px);
+  border-radius: 0;
+  background: transparent;
+}
+
+.mock-home .hero > .wrap {
+  padding-left: clamp(24px, 4.2vw, 88px);
+  padding-right: clamp(24px, 4.2vw, 88px);
+}
+
+.mock-home .hero .disp {
+  letter-spacing: -0.014em;
+}
+
+.mock-home .hero-stats {
+  right: clamp(48px, 5vw, 96px);
+  max-width: min(58vw, calc(100% - clamp(96px, 10vw, 192px)));
+  min-width: 0;
+  justify-content: flex-end;
+  gap: clamp(12px, 1.35vw, 24px);
+}
+
+.mock-home .hero-stats .hs {
+  min-width: 0;
+  max-width: 100%;
+  gap: 0;
+}
+
+.mock-home .hero-stats .hs b {
+  line-height: 1.16;
+}
+
+.mock-home .hero-stats .hs span {
+  margin-top: 5px;
+  line-height: 1.42;
+}
+
+.mock-home .hero-stats .hs b,
+.mock-home .hero-stats .hs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1280px) {
+  .mock-home .hero-stats {
+    right: clamp(34px, 4vw, 56px);
+    max-width: 52vw;
+    gap: 12px;
+  }
+
+  .mock-home .hero-stats .hs {
+    padding-left: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .mock-home .hero {
+    min-height: max(720px, 86vh);
+    margin-top: calc(-1 * (62px + 14px));
+    padding-top: calc(clamp(128px, 13vw, 220px) + 40px);
+  }
+}
+</style>

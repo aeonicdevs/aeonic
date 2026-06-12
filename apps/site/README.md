@@ -2,12 +2,14 @@
 
 Public marketing site for Aeonic.
 
-This Nuxt app serves the main public website, product positioning, company
-pages, and other unauthenticated marketing pages.
+This Nuxt app currently serves the client-provided mockup port as the source of
+truth for the public marketing site.
 
 The messy `AEONIC (28)/` folder at the repo root is client-provided reference
-material, not production source. Recreate useful pages here as structured Vue
-components and copy only curated assets into `public/assets/`.
+material, not production source. The active implementation lives in
+`pages/index.vue` and loads the mockup stylesheet, script, and assets from
+`public/mock/`. Once the mockup match is acceptable, extract stable shared
+styles/components from that implementation deliberately.
 
 ## Local development
 
