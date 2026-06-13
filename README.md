@@ -4,7 +4,8 @@ This repo is split into:
 
 - `backend/` - FastAPI application
 - `apps/site/` - public marketing site
-- `apps/nexus/` - authenticated Aeonic Nexus app for patients, members, and provider-facing workflows
+- `apps/partner/` - partner app for clinic-owner signup, login, dashboard, and domain configuration
+- `apps/nexus/` - patient-facing Aeonic Nexus app that resolves the partner from the request host
 
 Shared frontend packages can be added under `packages/` when there is enough
 shared UI, configuration, or API client code to justify them.
@@ -44,6 +45,39 @@ Run the same static build locally:
 cd apps/site
 npm run generate:netlify
 ```
+
+## Partner And Nexus Skeleton
+
+Run the API, Partner app, and Nexus app in separate terminals:
+
+```sh
+cd backend
+uvicorn app.main:app --reload
+```
+
+```sh
+cd apps/partner
+npm run dev
+```
+
+```sh
+cd apps/nexus
+npm run dev
+```
+
+Local URLs:
+
+- Marketing site: `http://127.0.0.1:3000`
+- Partner app: `http://127.0.0.1:5174`
+- Nexus patient app: `http://127.0.0.1:5173`
+
+For local subdomain simulation, save a clinic domain in the Partner app, then open Nexus with:
+
+```text
+http://127.0.0.1:5173/?clinicHost=patients.yourclinic.test
+```
+
+In production, the clinic's patient-facing DNS record should point at the Nexus deployment. Nexus sends the browser host to the API, and the API resolves that host to the configured partner.
 
 ## Deployment
 

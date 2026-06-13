@@ -38,8 +38,16 @@ body {
     linear-gradient(180deg, #f8f6f0 0%, var(--ae-paper) 32rem);
 }
 
+.patient-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(15, 157, 142, 0.1), rgba(15, 157, 142, 0) 360px),
+    var(--ae-paper);
+}
+
 .nexus-card {
   border: 1px solid var(--ae-line);
+  border-radius: 8px;
   box-shadow: 0 1px 2px rgba(20, 32, 28, 0.04), 0 10px 28px -18px rgba(20, 32, 28, 0.24);
 }
 
@@ -133,6 +141,26 @@ body {
 .topbar {
   border-bottom: 1px solid rgba(231, 226, 214, 0.92);
   backdrop-filter: blur(12px);
+}
+
+.patient-topbar {
+  border-bottom: 1px solid rgba(231, 226, 214, 0.92);
+  background: rgba(245, 243, 236, 0.88);
+  backdrop-filter: blur(12px);
+}
+
+.label {
+  color: var(--ae-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.patient-preview {
+  border: 1px dashed #bac8c1;
+  border-radius: 8px;
+  background: #fbfaf7;
 }
 
 @media (max-width: 960px) {

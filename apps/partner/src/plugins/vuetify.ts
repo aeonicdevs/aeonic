@@ -8,16 +8,16 @@ export const vuetify = createVuetify({
     sets: { mdi },
   },
   theme: {
-    defaultTheme: 'aeonicLight',
+    defaultTheme: 'aeonicPartner',
     themes: {
-      aeonicLight: {
+      aeonicPartner: {
         dark: false,
         colors: {
-          background: '#f5f3ec',
+          background: '#f7f5ef',
           surface: '#ffffff',
-          primary: '#0f9d8e',
-          secondary: '#1d1b17',
-          accent: '#b9743a',
+          primary: '#0f8f83',
+          secondary: '#1f2421',
+          accent: '#9f6537',
           error: '#b3503a',
           info: '#3a5a86',
           success: '#2f8f6b',

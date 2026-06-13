@@ -1,6 +1,11 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
   devtools: { enabled: true },
+  runtimeConfig: {
+    public: {
+      partnerAppUrl: process.env.NUXT_PUBLIC_PARTNER_APP_URL || 'http://127.0.0.1:5174'
+    }
+  },
   app: {
     head: {
       titleTemplate: '%s | Aeonic',
@@ -33,6 +38,7 @@ export default defineNuxtConfig({
         '/member-login',
         '/nexus',
         '/partner-login',
+        '/partner-signup',
         '/our-story',
         '/mission',
         '/dr-lacey',
