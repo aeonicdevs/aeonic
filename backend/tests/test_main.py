@@ -77,3 +77,106 @@ def test_partner_configures_domain_and_patient_authenticates() -> None:
     me = client.get("/patients/me", headers={"Authorization": f"Bearer {patient_token}"})
     assert me.status_code == 200
     assert me.json()["patient"]["name"] == "Mira Chen"
+
+
+def test_partner_account_persists_across_app_instances(tmp_path) -> None:
+    database_path = tmp_path / "aeonic.sqlite3"
+    suffix = uuid4().hex[:8]
+    email = f"owner-{suffix}@example.com"
+
+    first_client = TestClient(create_app(database_path))
+    signup = first_client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Jordan Vale",
+            "email": email,
+            "password": "secret123",
+            "clinic_name": "Vale Longevity",
+        },
+    )
+    assert signup.status_code == 200
+
+    second_client = TestClient(create_app(database_path))
+    login = second_client.post(
+        "/partners/login",
+        json={"email": email, "password": "secret123"},
+    )
+    assert login.status_code == 200
+    assert login.json()["partner"]["clinicName"] == "Vale Longevity"
+
+
+def test_partner_email_must_be_unique(tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    email = f"owner-{uuid4().hex[:8]}@example.com"
+    payload = {
+        "owner_name": "Riley Moss",
+        "email": email,
+        "password": "secret123",
+        "clinic_name": "Moss Health",
+    }
+
+    first_signup = client.post("/partners/signup", json=payload)
+    duplicate_signup = client.post("/partners/signup", json=payload)
+
+    assert first_signup.status_code == 200
+    assert duplicate_signup.status_code == 409
+
+
+def test_patient_email_is_scoped_to_partner_domain(tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    shared_patient_email = f"patient-{suffix}@example.com"
+
+    partner_domains = []
+    for clinic_name in ["North Clinic", "South Clinic"]:
+        partner_signup = client.post(
+            "/partners/signup",
+            json={
+                "owner_name": f"{clinic_name} Owner",
+                "email": f"{clinic_name.lower().replace(' ', '-')}-{suffix}@example.com",
+                "password": "secret123",
+                "clinic_name": clinic_name,
+            },
+        )
+        assert partner_signup.status_code == 200
+        partner_token = partner_signup.json()["token"]
+        clinic_domain = f"{clinic_name.lower().replace(' ', '-')}-{suffix}.example.com"
+        settings = client.patch(
+            "/partners/settings",
+            headers={"Authorization": f"Bearer {partner_token}"},
+            json={"clinic_domain": clinic_domain},
+        )
+        assert settings.status_code == 200
+        partner_domains.append(clinic_domain)
+
+    first_patient = client.post(
+        "/patients/signup",
+        json={
+            "host": partner_domains[0],
+            "name": "Same Email",
+            "email": shared_patient_email,
+            "password": "secret123",
+        },
+    )
+    second_patient = client.post(
+        "/patients/signup",
+        json={
+            "host": partner_domains[1],
+            "name": "Same Email",
+            "email": shared_patient_email,
+            "password": "secret123",
+        },
+    )
+    duplicate_patient = client.post(
+        "/patients/signup",
+        json={
+            "host": partner_domains[0],
+            "name": "Same Email",
+            "email": shared_patient_email,
+            "password": "secret123",
+        },
+    )
+
+    assert first_patient.status_code == 200
+    assert second_patient.status_code == 200
+    assert duplicate_patient.status_code == 409

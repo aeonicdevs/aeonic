@@ -1,10 +1,18 @@
+import hashlib
 import os
+import secrets
+import sqlite3
 import uuid
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+
+PASSWORD_ITERATIONS = 390_000
+PrincipalKind = Literal["partner", "patient"]
 
 
 class PartnerSignup(BaseModel):
@@ -36,15 +44,63 @@ class PatientLogin(BaseModel):
     password: str = Field(min_length=1)
 
 
-Partner = dict[str, str | None]
-Patient = dict[str, str]
+def _default_database_path() -> Path:
+    configured_path = os.getenv("AEONIC_DATABASE_PATH")
+    if configured_path:
+        return Path(configured_path)
 
-partners_by_id: dict[str, Partner] = {}
-partner_ids_by_email: dict[str, str] = {}
-partner_ids_by_domain: dict[str, str] = {}
-patients_by_id: dict[str, Patient] = {}
-patient_ids_by_partner_email: dict[tuple[str, str], str] = {}
-tokens: dict[str, tuple[Literal["partner", "patient"], str]] = {}
+    return Path(__file__).resolve().parents[1] / ".data" / "aeonic.sqlite3"
+
+
+def _connect(database_path: str | Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
+def _initialize_database(database_path: str | Path) -> None:
+    if database_path != ":memory:":
+        Path(database_path).parent.mkdir(parents=True, exist_ok=True)
+
+    with _connect(database_path) as db:
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS partners (
+                id TEXT PRIMARY KEY,
+                owner_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                clinic_name TEXT NOT NULL,
+                clinic_domain TEXT UNIQUE,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS partner_domains (
+                domain TEXT PRIMARY KEY,
+                partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS patients (
+                id TEXT PRIMARY KEY,
+                partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (partner_id, email)
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                principal_type TEXT NOT NULL CHECK (principal_type IN ('partner', 'patient')),
+                principal_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
 
 
 def _normalize_email(email: str) -> str:
@@ -61,17 +117,24 @@ def _normalize_host(host: str) -> str:
     return value
 
 
-def _public_partner(partner: Partner) -> dict[str, str | None]:
+def _required(value: str, label: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise HTTPException(status_code=422, detail=f"{label} is required")
+    return cleaned
+
+
+def _public_partner(partner: sqlite3.Row) -> dict[str, str | None]:
     return {
-        "id": str(partner["id"]),
-        "ownerName": str(partner["owner_name"]),
-        "email": str(partner["email"]),
-        "clinicName": str(partner["clinic_name"]),
+        "id": partner["id"],
+        "ownerName": partner["owner_name"],
+        "email": partner["email"],
+        "clinicName": partner["clinic_name"],
         "clinicDomain": partner["clinic_domain"],
     }
 
 
-def _public_patient(patient: Patient) -> dict[str, str]:
+def _public_patient(patient: sqlite3.Row) -> dict[str, str]:
     return {
         "id": patient["id"],
         "partnerId": patient["partner_id"],
@@ -80,29 +143,117 @@ def _public_patient(patient: Patient) -> dict[str, str]:
     }
 
 
-def _issue_token(kind: Literal["partner", "patient"], entity_id: str) -> str:
-    token = uuid.uuid4().hex
-    tokens[token] = (kind, entity_id)
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        PASSWORD_ITERATIONS,
+    ).hex()
+    return f"pbkdf2_sha256${PASSWORD_ITERATIONS}${salt}${digest}"
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        algorithm, iterations, salt, expected_digest = stored_hash.split("$", 3)
+    except ValueError:
+        return False
+
+    if algorithm != "pbkdf2_sha256":
+        return False
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        int(iterations),
+    ).hex()
+    return secrets.compare_digest(digest, expected_digest)
+
+
+def _get_partner_by_id(db: sqlite3.Connection, partner_id: str) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM partners WHERE id = ?", (partner_id,)).fetchone()
+
+
+def _get_partner_by_email(db: sqlite3.Connection, email: str) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM partners WHERE email = ?", (email,)).fetchone()
+
+
+def _get_partner_by_domain(db: sqlite3.Connection, domain: str) -> sqlite3.Row | None:
+    return db.execute(
+        """
+        SELECT partners.*
+        FROM partners
+        JOIN partner_domains ON partner_domains.partner_id = partners.id
+        WHERE partner_domains.domain = ?
+        """,
+        (domain,),
+    ).fetchone()
+
+
+def _issue_token(db: sqlite3.Connection, kind: PrincipalKind, entity_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    db.execute(
+        "INSERT INTO sessions (token, principal_type, principal_id) VALUES (?, ?, ?)",
+        (token, kind, entity_id),
+    )
     return token
 
 
-def _seed_demo_partner() -> None:
-    if partners_by_id:
-        return
+def _authenticated(
+    db: sqlite3.Connection,
+    expected_kind: PrincipalKind,
+    authorization: str | None,
+) -> str:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
 
-    partner_id = "demo-partner"
-    partner: Partner = {
-        "id": partner_id,
-        "owner_name": "Demo Partner",
-        "email": "demo@aeonic.health",
-        "password": "password",
-        "clinic_name": "Demo Dental Studio",
-        "clinic_domain": "demo.localhost",
-    }
-    partners_by_id[partner_id] = partner
-    partner_ids_by_email["demo@aeonic.health"] = partner_id
-    for domain in ["demo.localhost", "localhost", "127.0.0.1"]:
-        partner_ids_by_domain[domain] = partner_id
+    token = authorization.split(" ", 1)[1].strip()
+    session = db.execute(
+        "SELECT principal_type, principal_id FROM sessions WHERE token = ?",
+        (token,),
+    ).fetchone()
+    if session is None or session["principal_type"] != expected_kind:
+        raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+    return session["principal_id"]
+
+
+def _seed_demo_partner(database_path: str | Path) -> None:
+    with _connect(database_path) as db:
+        existing_partner = _get_partner_by_email(db, "demo@aeonic.health")
+        if existing_partner is not None:
+            return
+
+        partner_id = "demo-partner"
+        db.execute(
+            """
+            INSERT INTO partners (
+                id, owner_name, email, password_hash, clinic_name, clinic_domain
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                partner_id,
+                "Demo Partner",
+                "demo@aeonic.health",
+                _hash_password("password"),
+                "Demo Dental Studio",
+                "demo.localhost",
+            ),
+        )
+        db.executemany(
+            """
+            INSERT OR IGNORE INTO partner_domains (domain, partner_id, is_primary)
+            VALUES (?, ?, ?)
+            """,
+            [
+                ("demo.localhost", partner_id, 1),
+                ("localhost", partner_id, 0),
+                ("127.0.0.1", partner_id, 0),
+            ],
+        )
 
 
 def _allowed_origins() -> list[str]:
@@ -121,23 +272,10 @@ def _allowed_origins() -> list[str]:
     return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 
-def _authenticated(
-    expected_kind: Literal["partner", "patient"],
-    authorization: str | None,
-) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-
-    token = authorization.split(" ", 1)[1].strip()
-    session = tokens.get(token)
-    if session is None or session[0] != expected_kind:
-        raise HTTPException(status_code=401, detail="Invalid bearer token")
-
-    return session[1]
-
-
-def create_app() -> FastAPI:
-    _seed_demo_partner()
+def create_app(database_path: str | Path | None = None) -> FastAPI:
+    resolved_database_path = database_path or _default_database_path()
+    _initialize_database(resolved_database_path)
+    _seed_demo_partner(resolved_database_path)
 
     app = FastAPI(title="Aeonic API", version="0.1.0")
 
@@ -159,129 +297,184 @@ def create_app() -> FastAPI:
 
     @app.post("/partners/signup", tags=["partners"])
     def partner_signup(payload: PartnerSignup) -> dict[str, object]:
+        owner_name = _required(payload.owner_name, "Owner name")
+        clinic_name = _required(payload.clinic_name, "Clinic name")
         email = _normalize_email(payload.email)
-        if email in partner_ids_by_email:
-            raise HTTPException(status_code=409, detail="Partner email already exists")
 
-        partner_id = uuid.uuid4().hex
-        partner: Partner = {
-            "id": partner_id,
-            "owner_name": payload.owner_name.strip(),
-            "email": email,
-            "password": payload.password,
-            "clinic_name": payload.clinic_name.strip(),
-            "clinic_domain": None,
-        }
-        partners_by_id[partner_id] = partner
-        partner_ids_by_email[email] = partner_id
+        with _connect(resolved_database_path) as db:
+            if _get_partner_by_email(db, email) is not None:
+                raise HTTPException(status_code=409, detail="Partner email already exists")
 
-        return {"token": _issue_token("partner", partner_id), "partner": _public_partner(partner)}
+            partner_id = uuid.uuid4().hex
+            db.execute(
+                """
+                INSERT INTO partners (
+                    id, owner_name, email, password_hash, clinic_name, clinic_domain
+                )
+                VALUES (?, ?, ?, ?, ?, NULL)
+                """,
+                (partner_id, owner_name, email, _hash_password(payload.password), clinic_name),
+            )
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=500, detail="Unable to create partner")
+
+            return {"token": _issue_token(db, "partner", partner_id), "partner": _public_partner(partner)}
 
     @app.post("/partners/login", tags=["partners"])
     def partner_login(payload: LoginRequest) -> dict[str, object]:
         email = _normalize_email(payload.email)
-        partner_id = partner_ids_by_email.get(email)
-        partner = partners_by_id.get(partner_id or "")
-        if partner is None or partner["password"] != payload.password:
-            raise HTTPException(status_code=401, detail="Invalid partner credentials")
 
-        return {"token": _issue_token("partner", str(partner["id"])), "partner": _public_partner(partner)}
+        with _connect(resolved_database_path) as db:
+            partner = _get_partner_by_email(db, email)
+            if partner is None or not _verify_password(payload.password, partner["password_hash"]):
+                raise HTTPException(status_code=401, detail="Invalid partner credentials")
+
+            return {"token": _issue_token(db, "partner", partner["id"]), "partner": _public_partner(partner)}
 
     @app.get("/partners/me", tags=["partners"])
     def partner_me(authorization: str | None = Header(default=None)) -> dict[str, object]:
-        partner_id = _authenticated("partner", authorization)
-        return {"partner": _public_partner(partners_by_id[partner_id])}
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            return {"partner": _public_partner(partner)}
 
     @app.patch("/partners/settings", tags=["partners"])
     def partner_settings(
         payload: PartnerSettingsUpdate,
         authorization: str | None = Header(default=None),
     ) -> dict[str, object]:
-        partner_id = _authenticated("partner", authorization)
-        partner = partners_by_id[partner_id]
-        previous_domain = partner["clinic_domain"]
         domain = _normalize_host(payload.clinic_domain)
+        if not domain:
+            raise HTTPException(status_code=422, detail="Clinic patient domain is required")
 
-        owner_id = partner_ids_by_domain.get(domain)
-        if owner_id is not None and owner_id != partner_id:
-            raise HTTPException(status_code=409, detail="Domain already belongs to another partner")
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
 
-        if previous_domain:
-            partner_ids_by_domain.pop(str(previous_domain), None)
+            owner = db.execute(
+                "SELECT partner_id FROM partner_domains WHERE domain = ?",
+                (domain,),
+            ).fetchone()
+            if owner is not None and owner["partner_id"] != partner_id:
+                raise HTTPException(status_code=409, detail="Domain already belongs to another partner")
 
-        partner["clinic_domain"] = domain
-        partner_ids_by_domain[domain] = partner_id
+            previous_domain = partner["clinic_domain"]
+            if previous_domain:
+                db.execute(
+                    "DELETE FROM partner_domains WHERE domain = ? AND partner_id = ? AND is_primary = 1",
+                    (previous_domain, partner_id),
+                )
 
-        return {"partner": _public_partner(partner)}
+            db.execute(
+                "UPDATE partners SET clinic_domain = ? WHERE id = ?",
+                (domain, partner_id),
+            )
+            db.execute(
+                """
+                INSERT INTO partner_domains (domain, partner_id, is_primary)
+                VALUES (?, ?, 1)
+                ON CONFLICT(domain) DO UPDATE SET partner_id = excluded.partner_id, is_primary = 1
+                """,
+                (domain, partner_id),
+            )
+            updated_partner = _get_partner_by_id(db, partner_id)
+            if updated_partner is None:
+                raise HTTPException(status_code=500, detail="Unable to save partner settings")
+
+            return {"partner": _public_partner(updated_partner)}
 
     @app.get("/nexus/context", tags=["nexus"])
     def nexus_context(host: str) -> dict[str, object]:
         domain = _normalize_host(host)
-        partner_id = partner_ids_by_domain.get(domain)
-        partner = partners_by_id.get(partner_id or "")
 
-        return {
-            "host": domain,
-            "partner": _public_partner(partner) if partner is not None else None,
-        }
+        with _connect(resolved_database_path) as db:
+            partner = _get_partner_by_domain(db, domain)
+            return {
+                "host": domain,
+                "partner": _public_partner(partner) if partner is not None else None,
+            }
 
     @app.post("/patients/signup", tags=["patients"])
     def patient_signup(payload: PatientSignup) -> dict[str, object]:
         domain = _normalize_host(payload.host)
-        partner_id = partner_ids_by_domain.get(domain)
-        if partner_id is None:
-            raise HTTPException(status_code=404, detail="No partner is configured for this host")
-
+        name = _required(payload.name, "Full name")
         email = _normalize_email(payload.email)
-        patient_key = (partner_id, email)
-        if patient_key in patient_ids_by_partner_email:
-            raise HTTPException(status_code=409, detail="Patient email already exists for this partner")
 
-        patient_id = uuid.uuid4().hex
-        patient: Patient = {
-            "id": patient_id,
-            "partner_id": partner_id,
-            "name": payload.name.strip(),
-            "email": email,
-            "password": payload.password,
-        }
-        patients_by_id[patient_id] = patient
-        patient_ids_by_partner_email[patient_key] = patient_id
+        with _connect(resolved_database_path) as db:
+            partner = _get_partner_by_domain(db, domain)
+            if partner is None:
+                raise HTTPException(status_code=404, detail="No partner is configured for this host")
 
-        return {
-            "token": _issue_token("patient", patient_id),
-            "patient": _public_patient(patient),
-            "partner": _public_partner(partners_by_id[partner_id]),
-        }
+            existing_patient = db.execute(
+                "SELECT id FROM patients WHERE partner_id = ? AND email = ?",
+                (partner["id"], email),
+            ).fetchone()
+            if existing_patient is not None:
+                raise HTTPException(status_code=409, detail="Patient email already exists for this partner")
+
+            patient_id = uuid.uuid4().hex
+            db.execute(
+                """
+                INSERT INTO patients (id, partner_id, name, email, password_hash)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (patient_id, partner["id"], name, email, _hash_password(payload.password)),
+            )
+            patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=500, detail="Unable to create patient")
+
+            return {
+                "token": _issue_token(db, "patient", patient_id),
+                "patient": _public_patient(patient),
+                "partner": _public_partner(partner),
+            }
 
     @app.post("/patients/login", tags=["patients"])
     def patient_login(payload: PatientLogin) -> dict[str, object]:
         domain = _normalize_host(payload.host)
-        partner_id = partner_ids_by_domain.get(domain)
-        if partner_id is None:
-            raise HTTPException(status_code=404, detail="No partner is configured for this host")
-
         email = _normalize_email(payload.email)
-        patient_id = patient_ids_by_partner_email.get((partner_id, email))
-        patient = patients_by_id.get(patient_id or "")
-        if patient is None or patient["password"] != payload.password:
-            raise HTTPException(status_code=401, detail="Invalid patient credentials")
 
-        return {
-            "token": _issue_token("patient", patient_id),
-            "patient": _public_patient(patient),
-            "partner": _public_partner(partners_by_id[partner_id]),
-        }
+        with _connect(resolved_database_path) as db:
+            partner = _get_partner_by_domain(db, domain)
+            if partner is None:
+                raise HTTPException(status_code=404, detail="No partner is configured for this host")
+
+            patient = db.execute(
+                "SELECT * FROM patients WHERE partner_id = ? AND email = ?",
+                (partner["id"], email),
+            ).fetchone()
+            if patient is None or not _verify_password(payload.password, patient["password_hash"]):
+                raise HTTPException(status_code=401, detail="Invalid patient credentials")
+
+            return {
+                "token": _issue_token(db, "patient", patient["id"]),
+                "patient": _public_patient(patient),
+                "partner": _public_partner(partner),
+            }
 
     @app.get("/patients/me", tags=["patients"])
     def patient_me(authorization: str | None = Header(default=None)) -> dict[str, object]:
-        patient_id = _authenticated("patient", authorization)
-        patient = patients_by_id[patient_id]
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
 
-        return {
-            "patient": _public_patient(patient),
-            "partner": _public_partner(partners_by_id[patient["partner_id"]]),
-        }
+            partner = _get_partner_by_id(db, patient["partner_id"])
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            return {
+                "patient": _public_patient(patient),
+                "partner": _public_partner(partner),
+            }
 
     return app
 
