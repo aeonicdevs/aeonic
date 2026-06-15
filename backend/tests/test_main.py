@@ -180,3 +180,45 @@ def test_patient_email_is_scoped_to_partner_domain(tmp_path) -> None:
     assert first_patient.status_code == 200
     assert second_patient.status_code == 200
     assert duplicate_patient.status_code == 409
+
+
+def test_partner_domains_must_be_unique(tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    shared_domain = f"shared-{suffix}.example.com"
+
+    first_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "First Owner",
+            "email": f"first-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "First Clinic",
+        },
+    )
+    assert first_signup.status_code == 200
+    first_settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {first_signup.json()['token']}"},
+        json={"clinic_domain": shared_domain},
+    )
+    assert first_settings.status_code == 200
+
+    second_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Second Owner",
+            "email": f"second-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Second Clinic",
+        },
+    )
+    assert second_signup.status_code == 200
+    second_settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {second_signup.json()['token']}"},
+        json={"clinic_domain": shared_domain},
+    )
+
+    assert second_settings.status_code == 409
+

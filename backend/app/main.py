@@ -192,6 +192,10 @@ def _get_partner_by_domain(db: sqlite3.Connection, domain: str) -> sqlite3.Row |
     ).fetchone()
 
 
+def _is_development() -> bool:
+    return os.getenv("APP_ENV", "development") != "production"
+
+
 def _issue_token(db: sqlite3.Connection, kind: PrincipalKind, entity_id: str) -> str:
     token = secrets.token_urlsafe(32)
     db.execute(
@@ -240,7 +244,7 @@ def _seed_demo_partner(database_path: str | Path) -> None:
                 "demo@aeonic.health",
                 _hash_password("password"),
                 "Demo Dental Studio",
-                "demo.localhost",
+                "app.demo.localhost",
             ),
         )
         db.executemany(
@@ -249,7 +253,8 @@ def _seed_demo_partner(database_path: str | Path) -> None:
             VALUES (?, ?, ?)
             """,
             [
-                ("demo.localhost", partner_id, 1),
+                ("app.demo.localhost", partner_id, 1),
+                ("demo.localhost", partner_id, 0),
                 ("localhost", partner_id, 0),
                 ("127.0.0.1", partner_id, 0),
             ],
@@ -258,18 +263,20 @@ def _seed_demo_partner(database_path: str | Path) -> None:
 
 def _allowed_origins() -> list[str]:
     raw_origins = os.getenv("ALLOWED_ORIGINS")
-    if raw_origins is None and os.getenv("APP_ENV", "development") != "production":
-        return [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5174",
-        ]
+    if raw_origins is None and _is_development():
+        return []
 
     raw_origins = raw_origins or ""
     return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
+
+def _allowed_origin_regex() -> str | None:
+    if os.getenv("ALLOWED_ORIGINS") is not None:
+        return None
+    if not _is_development():
+        return None
+
+    return r"^http://(localhost|127\.0\.0\.1):[0-9]+$"
 
 
 def create_app(database_path: str | Path | None = None) -> FastAPI:
@@ -282,6 +289,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_allowed_origins(),
+        allow_origin_regex=_allowed_origin_regex(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

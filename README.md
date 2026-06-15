@@ -71,13 +71,17 @@ Local URLs:
 - Partner app: `http://127.0.0.1:5174`
 - Nexus patient app: `http://127.0.0.1:5173`
 
-For local subdomain simulation, save a clinic domain in the Partner app, then open Nexus with:
+For local host simulation, save the real patient domain in the Partner app, then open Nexus with:
 
 ```text
-http://127.0.0.1:5173/?clinicHost=patients.yourclinic.test
+http://127.0.0.1:5173/?clinicHost=app.nathansdentistry.com
 ```
 
-In production, the clinic's patient-facing DNS record should point at the Nexus deployment. Nexus sends the browser host to the API, and the API resolves that host to the configured partner.
+That lets you exercise the same API domain mapping without waiting for a production deploy or changing DNS. In production, the clinic's patient-facing DNS record should point at the Nexus deployment. Nexus sends the browser host to the API, and the API resolves that host to the configured partner.
+
+For Cloudflare Tunnel testing, save the actual tunnel hostname in the Partner app, for example `nexus-test.viper.guru`, then visit that same hostname in the browser. Nexus sends the browser host to the API, and the API resolves it directly.
+
+In development, the API allows localhost origins on any port so Vite can auto-select a free port without breaking API calls.
 
 ## Deployment
 

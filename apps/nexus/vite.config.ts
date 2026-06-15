@@ -10,4 +10,7 @@ export default defineConfig({
       styles: { configFile: 'src/styles/settings.scss' },
     }),
   ],
+  server: {
+    allowedHosts: ['nexus-test.viper.guru'],
+  },
 });

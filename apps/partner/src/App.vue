@@ -33,7 +33,7 @@ const login = reactive({
 });
 
 const nexusUrl = computed(() => {
-  const host = partner.value?.clinicDomain || 'demo.localhost';
+  const host = partner.value?.clinicDomain || 'app.demo.localhost';
   return `http://127.0.0.1:5173/?clinicHost=${encodeURIComponent(host)}`;
 });
 
