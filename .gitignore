@@ -28,3 +28,9 @@ build/
 # IDEs
 .idea/
 .vscode/
+
+# Local Codex config
+.codex/
+
+# Local reference material
+_reference_material_do_not_track/
