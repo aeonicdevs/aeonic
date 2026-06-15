@@ -79,6 +79,50 @@ def test_partner_configures_domain_and_patient_authenticates() -> None:
     assert me.json()["patient"]["name"] == "Mira Chen"
 
 
+def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Domain Owner",
+            "email": f"domain-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Domain Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+    partner_token = partner_signup.json()["token"]
+
+    empty_verification = client.post(
+        "/partners/domain/verify",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+    assert empty_verification.status_code == 200
+    assert empty_verification.json()["verification"]["status"] == "not_configured"
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_token}"},
+        json={"clinic_domain": f"app-{suffix}.localhost"},
+    )
+    assert settings.status_code == 200
+
+    verification = client.post(
+        "/partners/domain/verify",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+
+    assert verification.status_code == 200
+    body = verification.json()["verification"]
+    assert body["domain"] == f"app-{suffix}.localhost"
+    assert body["recordType"] == "CNAME"
+    assert body["recordName"] == f"app-{suffix}.localhost"
+    assert body["recordValue"] == "nexus.aeonichealthsystems.com"
+    assert body["status"] == "connected"
+
+
 def test_partner_account_persists_across_app_instances(tmp_path) -> None:
     database_path = tmp_path / "aeonic.sqlite3"
     suffix = uuid4().hex[:8]
@@ -221,4 +265,3 @@ def test_partner_domains_must_be_unique(tmp_path) -> None:
     )
 
     assert second_settings.status_code == 409
-

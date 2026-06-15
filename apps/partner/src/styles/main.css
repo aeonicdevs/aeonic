@@ -81,3 +81,40 @@ body {
   padding: 14px 16px;
   word-break: break-word;
 }
+
+.dns-setup {
+  border-top: 1px solid var(--ae-line);
+  padding-top: 20px;
+}
+
+.dns-record-grid {
+  display: grid;
+  grid-template-columns: 0.7fr 1.4fr 1.4fr;
+  gap: 12px;
+}
+
+.dns-record-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--ae-line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.dns-record-value {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  word-break: break-word;
+}
+
+@media (max-width: 800px) {
+  .dns-record-grid {
+    grid-template-columns: 1fr;
+  }
+}

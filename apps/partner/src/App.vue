@@ -12,14 +12,28 @@ type Partner = {
   clinicDomain: string | null;
 };
 
+type DomainStatus = 'not_configured' | 'pending_dns' | 'connected' | 'needs_attention';
+
+type DomainVerification = {
+  domain: string | null;
+  recordType: 'CNAME';
+  recordName: string | null;
+  recordValue: string;
+  status: DomainStatus;
+  message: string;
+  checkedAt: string;
+};
+
 const mode = ref<'signup' | 'login'>('signup');
 const loading = ref(false);
+const verifyingDomain = ref(false);
 const error = ref('');
 const notice = ref('');
 const token = ref(localStorage.getItem(TOKEN_KEY) ?? '');
 const partner = ref<Partner | null>(null);
 const baseDomainDraft = ref('');
 const subdomainDraft = ref('app');
+const domainVerification = ref<DomainVerification | null>(null);
 
 const signup = reactive({
   owner_name: '',
@@ -45,6 +59,53 @@ const hostnamePreview = computed(() => {
   return `${subdomain}.${baseDomain}`;
 });
 
+const dnsRecord = computed(() => {
+  const domain = partner.value?.clinicDomain || hostnamePreview.value || null;
+  return {
+    type: domainVerification.value?.recordType ?? 'CNAME',
+    name: domainVerification.value?.recordName ?? domain,
+    value: domainVerification.value?.recordValue ?? 'nexus.aeonichealthsystems.com',
+  };
+});
+
+const domainStatus = computed<DomainStatus>(() => {
+  if (!partner.value?.clinicDomain) return 'not_configured';
+  return domainVerification.value?.status ?? 'pending_dns';
+});
+
+const domainStatusCopy = computed(() => {
+  switch (domainStatus.value) {
+    case 'connected':
+      return {
+        color: 'success',
+        icon: 'mdi-check-circle',
+        label: 'Connected',
+        message: domainVerification.value?.message ?? 'DNS is connected.',
+      };
+    case 'needs_attention':
+      return {
+        color: 'warning',
+        icon: 'mdi-alert-circle',
+        label: 'Needs attention',
+        message: domainVerification.value?.message ?? 'DNS is resolving, but not to the expected Nexus target.',
+      };
+    case 'not_configured':
+      return {
+        color: 'default',
+        icon: 'mdi-web-off',
+        label: 'Not configured',
+        message: 'Save a patient-facing domain to generate DNS instructions.',
+      };
+    default:
+      return {
+        color: 'info',
+        icon: 'mdi-progress-clock',
+        label: 'Pending DNS setup',
+        message: domainVerification.value?.message ?? 'Create this CNAME record with your DNS provider, then verify it.',
+      };
+  }
+});
+
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -66,6 +127,7 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 function setSession(nextToken: string, nextPartner: Partner) {
   token.value = nextToken;
   partner.value = nextPartner;
+  domainVerification.value = null;
   hydrateDomainDrafts(nextPartner.clinicDomain);
   localStorage.setItem(TOKEN_KEY, nextToken);
 }
@@ -167,11 +229,42 @@ async function saveDomain() {
     });
     partner.value = body.partner;
     hydrateDomainDrafts(body.partner.clinicDomain);
-    notice.value = 'Domain saved. Nexus will resolve this host to your clinic.';
+    domainVerification.value = null;
+    notice.value = 'Domain saved. Add the DNS record below, then verify the connection.';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to save domain';
   } finally {
     loading.value = false;
+  }
+}
+
+async function verifyDomain() {
+  verifyingDomain.value = true;
+  error.value = '';
+  notice.value = '';
+  try {
+    const body = await api<{ verification: DomainVerification }>('/partners/domain/verify', {
+      method: 'POST',
+    });
+    domainVerification.value = body.verification;
+    notice.value = body.verification.status === 'connected'
+      ? 'Domain connected. Nexus is ready on your patient-facing host.'
+      : '';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to verify domain';
+  } finally {
+    verifyingDomain.value = false;
+  }
+}
+
+async function copyDnsValue(value: string | null) {
+  if (!value) return;
+
+  try {
+    await navigator.clipboard.writeText(value);
+    notice.value = 'Copied DNS value.';
+  } catch {
+    error.value = 'Unable to copy. Select the value and copy it manually.';
   }
 }
 
@@ -181,6 +274,7 @@ async function restoreSession() {
   try {
     const body = await api<{ partner: Partner }>('/partners/me');
     partner.value = body.partner;
+    domainVerification.value = null;
     hydrateDomainDrafts(body.partner.clinicDomain);
   } catch {
     localStorage.removeItem(TOKEN_KEY);
@@ -191,6 +285,7 @@ async function restoreSession() {
 function signOut() {
   token.value = '';
   partner.value = null;
+  domainVerification.value = null;
   hydrateDomainDrafts(null);
   localStorage.removeItem(TOKEN_KEY);
 }
@@ -290,8 +385,11 @@ onMounted(restoreSession);
             <v-col cols="12" md="4">
               <div class="stat">
                 <div class="label mb-2">Status</div>
-                <div class="serif text-h5">Skeleton live</div>
-                <div class="text-caption text-medium-emphasis mt-1">Auth and routing are wired.</div>
+                <div class="d-flex align-center ga-2">
+                  <v-icon :color="domainStatusCopy.color" :icon="domainStatusCopy.icon" size="20" />
+                  <div class="serif text-h5">{{ domainStatusCopy.label }}</div>
+                </div>
+                <div class="text-caption text-medium-emphasis mt-1">{{ domainStatusCopy.message }}</div>
               </div>
             </v-col>
           </v-row>
@@ -324,6 +422,72 @@ onMounted(restoreSession);
             <div class="domain-final mt-4">
               <span class="label">Nexus host</span>
               <span>{{ hostnamePreview || 'app.yourclinic.com' }}</span>
+            </div>
+
+            <div class="dns-setup mt-5">
+              <div class="d-flex flex-column flex-md-row align-md-center ga-3 mb-4">
+                <div>
+                  <div class="label mb-2">DNS setup</div>
+                  <h3 class="text-h6 mb-1">Create this record with your DNS provider</h3>
+                  <div class="text-body-2 text-medium-emphasis">
+                    DNS changes can take a few minutes to propagate. Verify again after your provider saves the record.
+                  </div>
+                </div>
+                <v-spacer />
+                <v-chip :color="domainStatusCopy.color" :prepend-icon="domainStatusCopy.icon" variant="tonal">
+                  {{ domainStatusCopy.label }}
+                </v-chip>
+              </div>
+
+              <div class="dns-record-grid">
+                <div class="dns-record-cell">
+                  <span class="label">Type</span>
+                  <strong>{{ dnsRecord.type }}</strong>
+                </div>
+                <div class="dns-record-cell">
+                  <span class="label">Name</span>
+                  <div class="dns-record-value">
+                    <strong>{{ dnsRecord.name || 'Save a domain first' }}</strong>
+                    <v-btn
+                      :disabled="!dnsRecord.name"
+                      icon="mdi-content-copy"
+                      size="small"
+                      title="Copy DNS record name"
+                      variant="text"
+                      @click="copyDnsValue(dnsRecord.name)"
+                    />
+                  </div>
+                </div>
+                <div class="dns-record-cell">
+                  <span class="label">Value</span>
+                  <div class="dns-record-value">
+                    <strong>{{ dnsRecord.value }}</strong>
+                    <v-btn
+                      icon="mdi-content-copy"
+                      size="small"
+                      title="Copy DNS record value"
+                      variant="text"
+                      @click="copyDnsValue(dnsRecord.value)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex flex-column flex-md-row align-md-center ga-3 mt-4">
+                <div class="text-body-2 text-medium-emphasis">
+                  {{ domainStatusCopy.message }}
+                </div>
+                <v-spacer />
+                <v-btn
+                  color="primary"
+                  :disabled="!partner.clinicDomain"
+                  :loading="verifyingDomain"
+                  prepend-icon="mdi-shield-check"
+                  @click="verifyDomain"
+                >
+                  Verify connection
+                </v-btn>
+              </div>
             </div>
           </v-card>
         </template>

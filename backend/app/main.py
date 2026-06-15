@@ -1,8 +1,10 @@
 import hashlib
 import os
 import secrets
+import socket
 import sqlite3
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -13,6 +15,7 @@ from pydantic import BaseModel, Field
 
 PASSWORD_ITERATIONS = 390_000
 PrincipalKind = Literal["partner", "patient"]
+DomainStatus = Literal["not_configured", "pending_dns", "connected", "needs_attention"]
 
 
 class PartnerSignup(BaseModel):
@@ -141,6 +144,83 @@ def _public_patient(patient: sqlite3.Row) -> dict[str, str]:
         "name": patient["name"],
         "email": patient["email"],
     }
+
+
+def _nexus_dns_target() -> str:
+    return _normalize_host(os.getenv("NEXUS_DNS_TARGET", "nexus.aeonichealthsystems.com"))
+
+
+def _resolve_ipv4(host: str) -> set[str]:
+    addresses = socket.getaddrinfo(host, None, family=socket.AF_INET, type=socket.SOCK_STREAM)
+    return {address[4][0] for address in addresses}
+
+
+def _is_local_development_host(host: str) -> bool:
+    return host == "localhost" or host == "127.0.0.1" or host.endswith(".localhost")
+
+
+def _domain_verification_payload(
+    domain: str | None,
+    status: DomainStatus,
+    message: str,
+) -> dict[str, str | None]:
+    return {
+        "domain": domain,
+        "recordType": "CNAME",
+        "recordName": domain,
+        "recordValue": _nexus_dns_target(),
+        "status": status,
+        "message": message,
+        "checkedAt": datetime.now(UTC).isoformat(),
+    }
+
+
+def _verify_domain(domain: str | None) -> dict[str, str | None]:
+    if not domain:
+        return _domain_verification_payload(
+            None,
+            "not_configured",
+            "Add a patient-facing domain before checking DNS.",
+        )
+
+    if _is_local_development_host(domain):
+        return _domain_verification_payload(
+            domain,
+            "connected",
+            "Local development domains are ready for preview.",
+        )
+
+    target = _nexus_dns_target()
+    try:
+        domain_addresses = _resolve_ipv4(domain)
+    except socket.gaierror:
+        return _domain_verification_payload(
+            domain,
+            "pending_dns",
+            "No DNS record was found for this host yet.",
+        )
+
+    try:
+        target_addresses = _resolve_ipv4(target)
+    except socket.gaierror:
+        return _domain_verification_payload(
+            domain,
+            "needs_attention",
+            f"The Nexus target {target} is not resolving.",
+        )
+
+    if domain_addresses & target_addresses:
+        return _domain_verification_payload(
+            domain,
+            "connected",
+            "DNS resolves to the Nexus target.",
+        )
+
+    return _domain_verification_payload(
+        domain,
+        "needs_attention",
+        f"DNS is resolving, but not to {target}.",
+    )
 
 
 def _hash_password(password: str) -> str:
@@ -396,6 +476,16 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=500, detail="Unable to save partner settings")
 
             return {"partner": _public_partner(updated_partner)}
+
+    @app.post("/partners/domain/verify", tags=["partners"])
+    def partner_domain_verify(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            return {"verification": _verify_domain(partner["clinic_domain"])}
 
     @app.get("/nexus/context", tags=["nexus"])
     def nexus_context(host: str) -> dict[str, object]:
