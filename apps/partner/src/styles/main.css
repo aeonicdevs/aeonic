@@ -69,3 +69,15 @@ body {
   border-radius: 8px;
   background: #fbfaf7;
 }
+
+.domain-final {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px dashed #b8c6bf;
+  border-radius: 8px;
+  background: #fbfaf7;
+  padding: 14px 16px;
+  word-break: break-word;
+}

@@ -18,7 +18,8 @@ const error = ref('');
 const notice = ref('');
 const token = ref(localStorage.getItem(TOKEN_KEY) ?? '');
 const partner = ref<Partner | null>(null);
-const domainDraft = ref('');
+const baseDomainDraft = ref('');
+const subdomainDraft = ref('app');
 
 const signup = reactive({
   owner_name: '',
@@ -35,6 +36,13 @@ const login = reactive({
 const nexusUrl = computed(() => {
   const host = partner.value?.clinicDomain || 'app.demo.localhost';
   return `http://127.0.0.1:5173/?clinicHost=${encodeURIComponent(host)}`;
+});
+
+const hostnamePreview = computed(() => {
+  const baseDomain = normalizeHostInput(baseDomainDraft.value);
+  const subdomain = normalizeSubdomain(subdomainDraft.value);
+  if (!baseDomain || !subdomain) return '';
+  return `${subdomain}.${baseDomain}`;
 });
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -58,8 +66,46 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 function setSession(nextToken: string, nextPartner: Partner) {
   token.value = nextToken;
   partner.value = nextPartner;
-  domainDraft.value = nextPartner.clinicDomain ?? '';
+  hydrateDomainDrafts(nextPartner.clinicDomain);
   localStorage.setItem(TOKEN_KEY, nextToken);
+}
+
+function normalizeHostInput(value: string) {
+  let normalized = value.trim().toLowerCase();
+  if (normalized.includes('://')) {
+    normalized = normalized.split('://', 2)[1];
+  }
+  normalized = normalized.split('/', 1)[0];
+  if (normalized.includes(':') && !normalized.startsWith('[')) {
+    normalized = normalized.split(':', 1)[0];
+  }
+  return normalized.replace(/\.+$/, '');
+}
+
+function normalizeSubdomain(value: string) {
+  return value.trim().toLowerCase().replace(/^\.+|\.+$/g, '');
+}
+
+function isValidBaseDomain(value: string) {
+  const labels = value.split('.');
+  return labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+}
+
+function isValidSubdomain(value: string) {
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value);
+}
+
+function hydrateDomainDrafts(clinicDomain: string | null) {
+  if (!clinicDomain) {
+    subdomainDraft.value = 'app';
+    baseDomainDraft.value = '';
+    return;
+  }
+
+  const normalizedDomain = normalizeHostInput(clinicDomain);
+  const parts = normalizedDomain.split('.');
+  subdomainDraft.value = parts.length >= 3 ? parts[0] : 'app';
+  baseDomainDraft.value = parts.length >= 3 ? parts.slice(1).join('.') : normalizedDomain;
 }
 
 async function submitSignup() {
@@ -101,12 +147,26 @@ async function saveDomain() {
   error.value = '';
   notice.value = '';
   try {
+    const baseDomain = normalizeHostInput(baseDomainDraft.value);
+    const subdomain = normalizeSubdomain(subdomainDraft.value);
+
+    if (!baseDomain) {
+      throw new Error('Domain is required');
+    }
+    if (!isValidBaseDomain(baseDomain)) {
+      throw new Error('Enter a valid domain, for example yourclinic.com');
+    }
+    if (!isValidSubdomain(subdomain)) {
+      throw new Error('Subdomain can use only letters, numbers, and hyphens');
+    }
+
+    const clinicDomain = `${subdomain}.${baseDomain}`;
     const body = await api<{ partner: Partner }>('/partners/settings', {
       method: 'PATCH',
-      body: JSON.stringify({ clinic_domain: domainDraft.value }),
+      body: JSON.stringify({ clinic_domain: clinicDomain }),
     });
     partner.value = body.partner;
-    domainDraft.value = body.partner.clinicDomain ?? '';
+    hydrateDomainDrafts(body.partner.clinicDomain);
     notice.value = 'Domain saved. Nexus will resolve this host to your clinic.';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to save domain';
@@ -121,7 +181,7 @@ async function restoreSession() {
   try {
     const body = await api<{ partner: Partner }>('/partners/me');
     partner.value = body.partner;
-    domainDraft.value = body.partner.clinicDomain ?? '';
+    hydrateDomainDrafts(body.partner.clinicDomain);
   } catch {
     localStorage.removeItem(TOKEN_KEY);
     token.value = '';
@@ -131,6 +191,7 @@ async function restoreSession() {
 function signOut() {
   token.value = '';
   partner.value = null;
+  hydrateDomainDrafts(null);
   localStorage.removeItem(TOKEN_KEY);
 }
 
@@ -240,16 +301,19 @@ onMounted(restoreSession);
               <v-icon color="primary" icon="mdi-web" />
               <div>
                 <h2 class="text-h6 mb-0">Patient-facing domain</h2>
-                <div class="text-body-2 text-medium-emphasis">Enter the host that will point to Nexus, for example patients.yourclinic.com.</div>
+                <div class="text-body-2 text-medium-emphasis">Choose the subdomain that will point to Nexus from your clinic domain.</div>
               </div>
             </div>
 
             <v-alert v-if="notice" class="mb-4" type="success" variant="tonal">{{ notice }}</v-alert>
             <v-alert v-if="error" class="mb-4" type="error" variant="tonal">{{ error }}</v-alert>
 
-            <v-row align="center">
-              <v-col cols="12" md="8">
-                <v-text-field v-model="domainDraft" hide-details label="Clinic patient domain" placeholder="patients.yourclinic.com" />
+            <v-row align="start">
+              <v-col cols="12" md="4">
+                <v-text-field v-model="subdomainDraft" hide-details label="Subdomain" placeholder="app" />
+              </v-col>
+              <v-col cols="12" md="4">
+                <v-text-field v-model="baseDomainDraft" hide-details label="Clinic domain" placeholder="yourclinic.com" />
               </v-col>
               <v-col cols="12" md="4">
                 <v-btn block color="primary" :loading="loading" prepend-icon="mdi-content-save" size="large" @click="saveDomain">
@@ -257,6 +321,10 @@ onMounted(restoreSession);
                 </v-btn>
               </v-col>
             </v-row>
+            <div class="domain-final mt-4">
+              <span class="label">Nexus host</span>
+              <span>{{ hostnamePreview || 'app.yourclinic.com' }}</span>
+            </div>
           </v-card>
         </template>
       </v-container>
