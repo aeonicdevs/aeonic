@@ -15,6 +15,7 @@ backend/.data/
 .env
 .env.*
 !.env.example
+scripts/dev-local.env
 
 # Frontend
 node_modules/
