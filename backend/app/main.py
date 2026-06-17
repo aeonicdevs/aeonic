@@ -1,12 +1,16 @@
 import hashlib
+import json
 import os
 import secrets
 import socket
 import sqlite3
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +20,15 @@ from pydantic import BaseModel, Field
 PASSWORD_ITERATIONS = 390_000
 PrincipalKind = Literal["partner", "patient"]
 DomainStatus = Literal["not_configured", "pending_dns", "connected", "needs_attention"]
+CloudflareProvisioningStatus = Literal[
+    "not_configured",
+    "dns_not_ready",
+    "not_available",
+    "skipped",
+    "pending",
+    "active",
+    "needs_attention",
+]
 
 
 class PartnerSignup(BaseModel):
@@ -83,6 +96,12 @@ def _initialize_database(database_path: str | Path) -> None:
                 domain TEXT PRIMARY KEY,
                 partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
                 is_primary INTEGER NOT NULL DEFAULT 0,
+                cloudflare_custom_hostname_id TEXT,
+                cloudflare_hostname_status TEXT,
+                cloudflare_ssl_status TEXT,
+                cloudflare_ssl_validation_method TEXT,
+                cloudflare_error TEXT,
+                cloudflare_synced_at TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -104,6 +123,24 @@ def _initialize_database(database_path: str | Path) -> None:
             );
             """
         )
+        _ensure_partner_domain_cloudflare_columns(db)
+
+
+def _ensure_partner_domain_cloudflare_columns(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(partner_domains)").fetchall()}
+    migrations = {
+        "cloudflare_custom_hostname_id": "ALTER TABLE partner_domains ADD COLUMN cloudflare_custom_hostname_id TEXT",
+        "cloudflare_hostname_status": "ALTER TABLE partner_domains ADD COLUMN cloudflare_hostname_status TEXT",
+        "cloudflare_ssl_status": "ALTER TABLE partner_domains ADD COLUMN cloudflare_ssl_status TEXT",
+        "cloudflare_ssl_validation_method": (
+            "ALTER TABLE partner_domains ADD COLUMN cloudflare_ssl_validation_method TEXT"
+        ),
+        "cloudflare_error": "ALTER TABLE partner_domains ADD COLUMN cloudflare_error TEXT",
+        "cloudflare_synced_at": "ALTER TABLE partner_domains ADD COLUMN cloudflare_synced_at TEXT",
+    }
+    for column, statement in migrations.items():
+        if column not in columns:
+            db.execute(statement)
 
 
 def _normalize_email(email: str) -> str:
@@ -155,6 +192,48 @@ def _resolve_ipv4(host: str) -> set[str]:
     return {address[4][0] for address in addresses}
 
 
+def _normalize_dns_name(value: str) -> str:
+    return _normalize_host(value).rstrip(".")
+
+
+def _resolve_cname_chain(host: str) -> list[str]:
+    try:
+        import dns.exception
+        import dns.resolver
+    except ImportError:
+        return []
+
+    chain: list[str] = []
+    current = _normalize_dns_name(host)
+    resolver = dns.resolver.Resolver()
+    resolver.lifetime = 5
+    resolver.timeout = 2
+
+    for _ in range(8):
+        try:
+            answers = resolver.resolve(current, "CNAME")
+        except (
+            dns.resolver.NoAnswer,
+            dns.resolver.NXDOMAIN,
+            dns.resolver.NoNameservers,
+            dns.exception.Timeout,
+        ):
+            return chain
+
+        next_host = None
+        for answer in answers:
+            next_host = _normalize_dns_name(answer.to_text())
+            break
+
+        if next_host is None or next_host in chain:
+            return chain
+
+        chain.append(next_host)
+        current = next_host
+
+    return chain
+
+
 def _is_local_development_host(host: str) -> bool:
     return host == "localhost" or host == "127.0.0.1" or host.endswith(".localhost")
 
@@ -175,6 +254,230 @@ def _domain_verification_payload(
     }
 
 
+def _cloudflare_configured() -> bool:
+    return bool(os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ZONE_ID"))
+
+
+def _cloudflare_base_url() -> str:
+    return os.getenv("CLOUDFLARE_API_BASE_URL", "https://api.cloudflare.com/client/v4").rstrip("/")
+
+
+def _cloudflare_api_request(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    query: dict[str, str | int] | None = None,
+) -> dict[str, Any]:
+    token = os.getenv("CLOUDFLARE_API_TOKEN")
+    if not token:
+        raise HTTPException(status_code=503, detail="Cloudflare API token is not configured")
+
+    url = f"{_cloudflare_base_url()}{path}"
+    if query:
+        url = f"{url}?{urllib.parse.urlencode(query)}"
+
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError:
+            parsed = {"errors": [{"message": body or error.reason}]}
+        messages = [
+            item.get("message", "Cloudflare request failed")
+            for item in parsed.get("errors", [])
+            if isinstance(item, dict)
+        ]
+        raise HTTPException(
+            status_code=502,
+            detail="; ".join(messages) or f"Cloudflare request failed with HTTP {error.code}",
+        ) from error
+    except urllib.error.URLError as error:
+        raise HTTPException(status_code=502, detail=f"Cloudflare request failed: {error.reason}") from error
+
+
+def _cloudflare_zone_path(path: str = "") -> str:
+    zone_id = os.getenv("CLOUDFLARE_ZONE_ID")
+    if not zone_id:
+        raise HTTPException(status_code=503, detail="Cloudflare zone ID is not configured")
+    return f"/zones/{zone_id}/custom_hostnames{path}"
+
+
+def _cloudflare_custom_hostname_payload(partner_id: str, domain: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "hostname": domain,
+        "custom_metadata": {"partner_id": partner_id},
+        "ssl": {
+            "method": os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_SSL_METHOD", "http"),
+            "type": "dv",
+            "settings": {
+                "http2": "on",
+                "min_tls_version": "1.2",
+                "tls_1_3": "on",
+            },
+        },
+    }
+
+    certificate_authority = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_CA")
+    if certificate_authority:
+        payload["ssl"]["certificate_authority"] = certificate_authority
+
+    custom_origin_server = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN")
+    if custom_origin_server:
+        payload["custom_origin_server"] = _normalize_host(custom_origin_server)
+
+    custom_origin_sni = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI")
+    if custom_origin_sni:
+        payload["custom_origin_sni"] = custom_origin_sni.strip()
+
+    return payload
+
+
+def _extract_cloudflare_result(response: dict[str, Any]) -> dict[str, Any]:
+    if not response.get("success", False):
+        errors = response.get("errors", [])
+        messages = [item.get("message", "Cloudflare request failed") for item in errors if isinstance(item, dict)]
+        raise HTTPException(status_code=502, detail="; ".join(messages) or "Cloudflare request failed")
+
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=502, detail="Cloudflare response did not include a custom hostname")
+    return result
+
+
+def _find_cloudflare_custom_hostname(domain: str) -> dict[str, Any] | None:
+    response = _cloudflare_api_request(
+        "GET",
+        _cloudflare_zone_path(),
+        query={"hostname.exact": domain, "per_page": 5},
+    )
+    if not response.get("success", False):
+        return None
+
+    results = response.get("result", [])
+    if not isinstance(results, list):
+        return None
+    for result in results:
+        if isinstance(result, dict) and result.get("hostname") == domain:
+            return result
+    return None
+
+
+def _get_cloudflare_custom_hostname(custom_hostname_id: str) -> dict[str, Any]:
+    return _extract_cloudflare_result(
+        _cloudflare_api_request("GET", _cloudflare_zone_path(f"/{custom_hostname_id}"))
+    )
+
+
+def _create_cloudflare_custom_hostname(partner_id: str, domain: str) -> dict[str, Any]:
+    existing = _find_cloudflare_custom_hostname(domain)
+    if existing is not None:
+        return existing
+
+    return _extract_cloudflare_result(
+        _cloudflare_api_request(
+            "POST",
+            _cloudflare_zone_path(),
+            payload=_cloudflare_custom_hostname_payload(partner_id, domain),
+        )
+    )
+
+
+def _cloudflare_status_from_result(result: dict[str, Any]) -> CloudflareProvisioningStatus:
+    hostname_status = result.get("status")
+    ssl = result.get("ssl") if isinstance(result.get("ssl"), dict) else {}
+    ssl_status = ssl.get("status")
+    if hostname_status == "active" and ssl_status == "active":
+        return "active"
+    if hostname_status in {"blocked", "test_blocked", "test_failed"}:
+        return "needs_attention"
+    if isinstance(ssl_status, str) and ssl_status.endswith("_timed_out"):
+        return "needs_attention"
+    return "pending"
+
+
+def _public_cloudflare_custom_hostname(
+    domain: str | None,
+    status: CloudflareProvisioningStatus,
+    message: str,
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    result = result or {}
+    ssl = result.get("ssl") if isinstance(result.get("ssl"), dict) else {}
+    return {
+        "domain": domain,
+        "status": status,
+        "message": message,
+        "id": result.get("id"),
+        "hostname": result.get("hostname", domain),
+        "hostnameStatus": result.get("status"),
+        "sslStatus": ssl.get("status"),
+        "sslValidationMethod": ssl.get("method"),
+        "syncedAt": datetime.now(UTC).isoformat(),
+        "ownershipVerification": result.get("ownership_verification"),
+        "ownershipVerificationHttp": result.get("ownership_verification_http"),
+        "validationRecords": ssl.get("validation_records"),
+        "error": error,
+    }
+
+
+def _persist_cloudflare_result(
+    db: sqlite3.Connection,
+    domain: str,
+    result: dict[str, Any],
+    error: str | None = None,
+) -> None:
+    ssl = result.get("ssl") if isinstance(result.get("ssl"), dict) else {}
+    db.execute(
+        """
+        UPDATE partner_domains
+        SET cloudflare_custom_hostname_id = ?,
+            cloudflare_hostname_status = ?,
+            cloudflare_ssl_status = ?,
+            cloudflare_ssl_validation_method = ?,
+            cloudflare_error = ?,
+            cloudflare_synced_at = ?
+        WHERE domain = ?
+        """,
+        (
+            result.get("id"),
+            result.get("status"),
+            ssl.get("status"),
+            ssl.get("method"),
+            error,
+            datetime.now(UTC).isoformat(),
+            domain,
+        ),
+    )
+
+
+def _persist_cloudflare_error(db: sqlite3.Connection, domain: str, error: str) -> None:
+    db.execute(
+        """
+        UPDATE partner_domains
+        SET cloudflare_error = ?,
+            cloudflare_synced_at = ?
+        WHERE domain = ?
+        """,
+        (error, datetime.now(UTC).isoformat(), domain),
+    )
+
+
 def _verify_domain(domain: str | None) -> dict[str, str | None]:
     if not domain:
         return _domain_verification_payload(
@@ -191,6 +494,22 @@ def _verify_domain(domain: str | None) -> dict[str, str | None]:
         )
 
     target = _nexus_dns_target()
+    target_cname_chain = _resolve_cname_chain(target)
+    target_names = {target, *target_cname_chain}
+    domain_cname_chain = _resolve_cname_chain(domain)
+    if target_names & set(domain_cname_chain):
+        return _domain_verification_payload(
+            domain,
+            "connected",
+            "DNS CNAME points to the Nexus target.",
+        )
+    if domain_cname_chain:
+        return _domain_verification_payload(
+            domain,
+            "needs_attention",
+            f"DNS CNAME points to {domain_cname_chain[-1]}, not {target}.",
+        )
+
     try:
         domain_addresses = _resolve_ipv4(domain)
     except socket.gaierror:
@@ -219,7 +538,7 @@ def _verify_domain(domain: str | None) -> dict[str, str | None]:
     return _domain_verification_payload(
         domain,
         "needs_attention",
-        f"DNS is resolving, but not to {target}.",
+        f"DNS is resolving, but no public CNAME to {target} is visible. If this record is in Cloudflare, set it to DNS only while verifying.",
     )
 
 
@@ -270,6 +589,66 @@ def _get_partner_by_domain(db: sqlite3.Connection, domain: str) -> sqlite3.Row |
         """,
         (domain,),
     ).fetchone()
+
+
+def _get_partner_domain(db: sqlite3.Connection, domain: str) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM partner_domains WHERE domain = ?", (domain,)).fetchone()
+
+
+def _public_stored_cloudflare_custom_hostname(
+    partner_domain: sqlite3.Row | None,
+    domain: str | None,
+) -> dict[str, Any]:
+    if not domain:
+        return _public_cloudflare_custom_hostname(
+            None,
+            "not_configured",
+            "Save a patient-facing domain before creating a Cloudflare custom hostname.",
+        )
+
+    if _is_local_development_host(domain):
+        return _public_cloudflare_custom_hostname(
+            domain,
+            "skipped",
+            "Local development domains do not need Cloudflare custom hostnames.",
+        )
+
+    if not _cloudflare_configured():
+        return _public_cloudflare_custom_hostname(
+            domain,
+            "not_available",
+            "Cloudflare is not configured for this environment.",
+        )
+
+    if partner_domain is None or partner_domain["cloudflare_custom_hostname_id"] is None:
+        return _public_cloudflare_custom_hostname(
+            domain,
+            "pending",
+            "Cloudflare will be created after DNS is confirmed.",
+        )
+
+    result = {
+        "id": partner_domain["cloudflare_custom_hostname_id"],
+        "hostname": domain,
+        "status": partner_domain["cloudflare_hostname_status"],
+        "ssl": {
+            "status": partner_domain["cloudflare_ssl_status"],
+            "method": partner_domain["cloudflare_ssl_validation_method"],
+        },
+    }
+    status = _cloudflare_status_from_result(result)
+    message = "Cloudflare hostname is active." if status == "active" else "Cloudflare is still provisioning SSL."
+    if status == "needs_attention":
+        message = partner_domain["cloudflare_error"] or "Cloudflare needs attention before this hostname can go live."
+    response = _public_cloudflare_custom_hostname(
+        domain,
+        status,
+        message,
+        result=result,
+        error=partner_domain["cloudflare_error"],
+    )
+    response["syncedAt"] = partner_domain["cloudflare_synced_at"]
+    return response
 
 
 def _is_development() -> bool:
@@ -486,6 +865,94 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=401, detail="Invalid bearer token")
 
             return {"verification": _verify_domain(partner["clinic_domain"])}
+
+    @app.get("/partners/domain/setup", tags=["partners"])
+    def partner_domain_setup(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            return {
+                "dns": {
+                    "recordType": "CNAME",
+                    "recordValue": _nexus_dns_target(),
+                }
+            }
+
+    @app.get("/partners/domain/cloudflare-custom-hostname", tags=["partners"])
+    def partner_domain_cloudflare_status(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            domain = partner["clinic_domain"]
+            partner_domain = _get_partner_domain(db, domain) if domain else None
+            return {"cloudflare": _public_stored_cloudflare_custom_hostname(partner_domain, domain)}
+
+    @app.post("/partners/domain/cloudflare-custom-hostname", tags=["partners"])
+    def partner_domain_cloudflare_create(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            domain = partner["clinic_domain"]
+            if not domain:
+                raise HTTPException(status_code=422, detail="Save a patient-facing domain first")
+
+            verification = _verify_domain(domain)
+            if verification["status"] != "connected":
+                return {
+                    "verification": verification,
+                    "cloudflare": _public_cloudflare_custom_hostname(
+                        domain,
+                        "dns_not_ready",
+                        "DNS must resolve to the Nexus target before Cloudflare can issue SSL.",
+                    ),
+                }
+
+            if _is_local_development_host(domain):
+                return {
+                    "verification": verification,
+                    "cloudflare": _public_cloudflare_custom_hostname(
+                        domain,
+                        "skipped",
+                        "Local development domains do not need Cloudflare custom hostnames.",
+                    ),
+                }
+
+            if not _cloudflare_configured():
+                raise HTTPException(status_code=503, detail="Cloudflare is not configured for this environment")
+
+            partner_domain = _get_partner_domain(db, domain)
+            try:
+                if partner_domain is not None and partner_domain["cloudflare_custom_hostname_id"]:
+                    result = _get_cloudflare_custom_hostname(partner_domain["cloudflare_custom_hostname_id"])
+                else:
+                    result = _create_cloudflare_custom_hostname(partner_id, domain)
+                _persist_cloudflare_result(db, domain, result)
+            except HTTPException as error:
+                _persist_cloudflare_error(db, domain, str(error.detail))
+                raise
+
+            status = _cloudflare_status_from_result(result)
+            message = (
+                "Cloudflare hostname is active."
+                if status == "active"
+                else "Cloudflare accepted the hostname and is provisioning SSL."
+            )
+            if status == "needs_attention":
+                message = "Cloudflare accepted the hostname, but it needs attention before it can go live."
+
+            return {
+                "verification": verification,
+                "cloudflare": _public_cloudflare_custom_hostname(domain, status, message, result=result),
+            }
 
     @app.get("/nexus/context", tags=["nexus"])
     def nexus_context(host: str) -> dict[str, object]:

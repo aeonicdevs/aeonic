@@ -13,6 +13,14 @@ type Partner = {
 };
 
 type DomainStatus = 'not_configured' | 'pending_dns' | 'connected' | 'needs_attention';
+type CloudflareProvisioningStatus =
+  | 'not_configured'
+  | 'dns_not_ready'
+  | 'not_available'
+  | 'skipped'
+  | 'pending'
+  | 'active'
+  | 'needs_attention';
 
 type DomainVerification = {
   domain: string | null;
@@ -24,16 +32,40 @@ type DomainVerification = {
   checkedAt: string;
 };
 
+type DomainSetup = {
+  recordType: 'CNAME';
+  recordValue: string;
+};
+
+type CloudflareCustomHostname = {
+  domain: string | null;
+  status: CloudflareProvisioningStatus;
+  message: string;
+  id: string | null;
+  hostname: string | null;
+  hostnameStatus: string | null;
+  sslStatus: string | null;
+  sslValidationMethod: string | null;
+  syncedAt: string | null;
+  error: string | null;
+};
+
 const mode = ref<'signup' | 'login'>('signup');
 const loading = ref(false);
 const verifyingDomain = ref(false);
+const provisioningCloudflare = ref(false);
 const error = ref('');
 const notice = ref('');
 const token = ref(localStorage.getItem(TOKEN_KEY) ?? '');
 const partner = ref<Partner | null>(null);
 const baseDomainDraft = ref('');
 const subdomainDraft = ref('app');
+const domainSetup = ref<DomainSetup>({
+  recordType: 'CNAME',
+  recordValue: 'nexus.aeonichealthsystems.com',
+});
 const domainVerification = ref<DomainVerification | null>(null);
+const cloudflareHostname = ref<CloudflareCustomHostname | null>(null);
 
 const signup = reactive({
   owner_name: '',
@@ -62,9 +94,9 @@ const hostnamePreview = computed(() => {
 const dnsRecord = computed(() => {
   const domain = partner.value?.clinicDomain || hostnamePreview.value || null;
   return {
-    type: domainVerification.value?.recordType ?? 'CNAME',
+    type: domainVerification.value?.recordType ?? domainSetup.value.recordType,
     name: domainVerification.value?.recordName ?? domain,
-    value: domainVerification.value?.recordValue ?? 'nexus.aeonichealthsystems.com',
+    value: domainVerification.value?.recordValue ?? domainSetup.value.recordValue,
   };
 });
 
@@ -106,6 +138,61 @@ const domainStatusCopy = computed(() => {
   }
 });
 
+const cloudflareStatusCopy = computed(() => {
+  const status = cloudflareHostname.value?.status ?? (partner.value?.clinicDomain ? 'pending' : 'not_configured');
+  switch (status) {
+    case 'active':
+      return {
+        color: 'success',
+        icon: 'mdi-cloud-check',
+        label: 'Active',
+        message: cloudflareHostname.value?.message ?? 'Cloudflare SSL is active for this hostname.',
+      };
+    case 'needs_attention':
+      return {
+        color: 'warning',
+        icon: 'mdi-cloud-alert',
+        label: 'Needs attention',
+        message: cloudflareHostname.value?.message ?? 'Cloudflare needs attention before this hostname can go live.',
+      };
+    case 'dns_not_ready':
+      return {
+        color: 'info',
+        icon: 'mdi-cloud-clock',
+        label: 'Waiting for DNS',
+        message: cloudflareHostname.value?.message ?? 'Verify the CNAME before creating the Cloudflare hostname.',
+      };
+    case 'not_available':
+      return {
+        color: 'warning',
+        icon: 'mdi-cloud-off-outline',
+        label: 'Not configured',
+        message: cloudflareHostname.value?.message ?? 'Cloudflare is not configured for this environment.',
+      };
+    case 'skipped':
+      return {
+        color: 'default',
+        icon: 'mdi-cloud-off-outline',
+        label: 'Skipped',
+        message: cloudflareHostname.value?.message ?? 'Local development domains do not need Cloudflare.',
+      };
+    case 'not_configured':
+      return {
+        color: 'default',
+        icon: 'mdi-cloud-outline',
+        label: 'Not configured',
+        message: 'Save a domain before creating a Cloudflare hostname.',
+      };
+    default:
+      return {
+        color: 'info',
+        icon: 'mdi-cloud-sync',
+        label: 'Ready to create',
+        message: cloudflareHostname.value?.message ?? 'Create the Cloudflare custom hostname after DNS is connected.',
+      };
+  }
+});
+
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -128,8 +215,10 @@ function setSession(nextToken: string, nextPartner: Partner) {
   token.value = nextToken;
   partner.value = nextPartner;
   domainVerification.value = null;
+  cloudflareHostname.value = null;
   hydrateDomainDrafts(nextPartner.clinicDomain);
   localStorage.setItem(TOKEN_KEY, nextToken);
+  void loadDomainSetup();
 }
 
 function normalizeHostInput(value: string) {
@@ -230,6 +319,7 @@ async function saveDomain() {
     partner.value = body.partner;
     hydrateDomainDrafts(body.partner.clinicDomain);
     domainVerification.value = null;
+    cloudflareHostname.value = null;
     notice.value = 'Domain saved. Add the DNS record below, then verify the connection.';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to save domain';
@@ -248,12 +338,61 @@ async function verifyDomain() {
     });
     domainVerification.value = body.verification;
     notice.value = body.verification.status === 'connected'
-      ? 'Domain connected. Nexus is ready on your patient-facing host.'
+      ? 'Domain connected. Create the Cloudflare hostname to finish SSL provisioning.'
       : '';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to verify domain';
   } finally {
     verifyingDomain.value = false;
+  }
+}
+
+async function loadCloudflareHostname() {
+  if (!partner.value?.clinicDomain) {
+    cloudflareHostname.value = null;
+    return;
+  }
+
+  try {
+    const body = await api<{ cloudflare: CloudflareCustomHostname }>('/partners/domain/cloudflare-custom-hostname');
+    cloudflareHostname.value = body.cloudflare;
+  } catch {
+    cloudflareHostname.value = null;
+  }
+}
+
+async function loadDomainSetup() {
+  if (!partner.value) return;
+
+  try {
+    const body = await api<{ dns: DomainSetup }>('/partners/domain/setup');
+    domainSetup.value = body.dns;
+  } catch {
+    domainSetup.value = {
+      recordType: 'CNAME',
+      recordValue: 'nexus.aeonichealthsystems.com',
+    };
+  }
+}
+
+async function provisionCloudflareHostname() {
+  provisioningCloudflare.value = true;
+  error.value = '';
+  notice.value = '';
+  try {
+    const body = await api<{ verification: DomainVerification; cloudflare: CloudflareCustomHostname }>(
+      '/partners/domain/cloudflare-custom-hostname',
+      { method: 'POST' },
+    );
+    domainVerification.value = body.verification;
+    cloudflareHostname.value = body.cloudflare;
+    notice.value = body.cloudflare.status === 'active'
+      ? 'Cloudflare custom hostname is active.'
+      : body.cloudflare.message;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to create Cloudflare hostname';
+  } finally {
+    provisioningCloudflare.value = false;
   }
 }
 
@@ -276,6 +415,8 @@ async function restoreSession() {
     partner.value = body.partner;
     domainVerification.value = null;
     hydrateDomainDrafts(body.partner.clinicDomain);
+    await loadDomainSetup();
+    await loadCloudflareHostname();
   } catch {
     localStorage.removeItem(TOKEN_KEY);
     token.value = '';
@@ -286,6 +427,7 @@ function signOut() {
   token.value = '';
   partner.value = null;
   domainVerification.value = null;
+  cloudflareHostname.value = null;
   hydrateDomainDrafts(null);
   localStorage.removeItem(TOKEN_KEY);
 }
@@ -399,32 +541,40 @@ onMounted(restoreSession);
               <v-icon color="primary" icon="mdi-web" />
               <div>
                 <h2 class="text-h6 mb-0">Patient-facing domain</h2>
-                <div class="text-body-2 text-medium-emphasis">Choose the subdomain that will point to Nexus from your clinic domain.</div>
+                <div class="text-body-2 text-medium-emphasis">Connect a partner-owned hostname, then let Aeonic provision it in Cloudflare.</div>
               </div>
             </div>
 
             <v-alert v-if="notice" class="mb-4" type="success" variant="tonal">{{ notice }}</v-alert>
             <v-alert v-if="error" class="mb-4" type="error" variant="tonal">{{ error }}</v-alert>
 
-            <v-row align="start">
-              <v-col cols="12" md="4">
-                <v-text-field v-model="subdomainDraft" hide-details label="Subdomain" placeholder="app" />
-              </v-col>
-              <v-col cols="12" md="4">
-                <v-text-field v-model="baseDomainDraft" hide-details label="Clinic domain" placeholder="yourclinic.com" />
-              </v-col>
-              <v-col cols="12" md="4">
-                <v-btn block color="primary" :loading="loading" prepend-icon="mdi-content-save" size="large" @click="saveDomain">
-                  Save domain
-                </v-btn>
-              </v-col>
-            </v-row>
-            <div class="domain-final mt-4">
-              <span class="label">Nexus host</span>
-              <span>{{ hostnamePreview || 'app.yourclinic.com' }}</span>
+            <div class="setup-step">
+              <div class="step-marker">1</div>
+              <div class="step-body">
+                <div class="label mb-2">Hostname</div>
+                <v-row align="start">
+                  <v-col cols="12" md="4">
+                    <v-text-field v-model="subdomainDraft" hide-details label="Subdomain" placeholder="app" />
+                  </v-col>
+                  <v-col cols="12" md="4">
+                    <v-text-field v-model="baseDomainDraft" hide-details label="Clinic domain" placeholder="yourclinic.com" />
+                  </v-col>
+                  <v-col cols="12" md="4">
+                    <v-btn block color="primary" :loading="loading" prepend-icon="mdi-content-save" size="large" @click="saveDomain">
+                      Save domain
+                    </v-btn>
+                  </v-col>
+                </v-row>
+                <div class="domain-final mt-4">
+                  <span class="label">Nexus host</span>
+                  <span>{{ hostnamePreview || 'app.yourclinic.com' }}</span>
+                </div>
+              </div>
             </div>
 
-            <div class="dns-setup mt-5">
+            <div class="setup-step mt-5">
+              <div class="step-marker">2</div>
+              <div class="step-body">
               <div class="d-flex flex-column flex-md-row align-md-center ga-3 mb-4">
                 <div>
                   <div class="label mb-2">DNS setup</div>
@@ -487,6 +637,57 @@ onMounted(restoreSession);
                 >
                   Verify connection
                 </v-btn>
+              </div>
+              </div>
+            </div>
+
+            <div class="setup-step mt-5">
+              <div class="step-marker">3</div>
+              <div class="step-body">
+                <div class="d-flex flex-column flex-md-row align-md-center ga-3 mb-4">
+                  <div>
+                    <div class="label mb-2">Cloudflare for SaaS</div>
+                    <h3 class="text-h6 mb-1">Create the custom hostname</h3>
+                    <div class="text-body-2 text-medium-emphasis">
+                      Once DNS is connected, Aeonic asks Cloudflare to create the SaaS hostname and issue SSL.
+                    </div>
+                  </div>
+                  <v-spacer />
+                  <v-chip :color="cloudflareStatusCopy.color" :prepend-icon="cloudflareStatusCopy.icon" variant="tonal">
+                    {{ cloudflareStatusCopy.label }}
+                  </v-chip>
+                </div>
+
+                <div class="cloudflare-grid">
+                  <div class="dns-record-cell">
+                    <span class="label">Hostname ID</span>
+                    <strong>{{ cloudflareHostname?.id || 'Not created yet' }}</strong>
+                  </div>
+                  <div class="dns-record-cell">
+                    <span class="label">Hostname status</span>
+                    <strong>{{ cloudflareHostname?.hostnameStatus || cloudflareStatusCopy.label }}</strong>
+                  </div>
+                  <div class="dns-record-cell">
+                    <span class="label">SSL status</span>
+                    <strong>{{ cloudflareHostname?.sslStatus || 'Pending creation' }}</strong>
+                  </div>
+                </div>
+
+                <div class="d-flex flex-column flex-md-row align-md-center ga-3 mt-4">
+                  <div class="text-body-2 text-medium-emphasis">
+                    {{ cloudflareStatusCopy.message }}
+                  </div>
+                  <v-spacer />
+                  <v-btn
+                    color="primary"
+                    :disabled="!partner.clinicDomain || cloudflareHostname?.status === 'skipped'"
+                    :loading="provisioningCloudflare"
+                    prepend-icon="mdi-cloud-upload"
+                    @click="provisionCloudflareHostname"
+                  >
+                    Confirm CNAME and create
+                  </v-btn>
+                </div>
               </div>
             </div>
           </v-card>

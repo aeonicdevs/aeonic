@@ -32,6 +32,7 @@ NEXUS_HOSTNAME="${AEONIC_NEXUS_TUNNEL_HOSTNAME:-nexus-$DEV_SUBDOMAIN-local.$TEST
 PARTNER_HOSTNAME="${AEONIC_PARTNER_TUNNEL_HOSTNAME:-partner-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 WWW_HOSTNAME="${AEONIC_WWW_TUNNEL_HOSTNAME:-www-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 PATIENT_DOMAIN_ALIAS_TARGET="${AEONIC_PATIENT_DOMAIN_ALIAS_TARGET:-app.nathansdentistry.com}"
+NEXUS_DNS_TARGET="${NEXUS_DNS_TARGET:-$NEXUS_HOSTNAME}"
 
 required_commands=(tmux cloudflared npm)
 for command_name in "${required_commands[@]}"; do
@@ -86,7 +87,7 @@ tmux new-window -t "$SESSION_NAME" -n tunnel \
   "cloudflared --config '$CONFIG_FILE' tunnel run '$TUNNEL_NAME'$HOLD"
 
 tmux new-window -t "$SESSION_NAME" -n backend \
-  "cd '$REPO_ROOT/backend' && APP_ENV=development ALLOWED_ORIGINS='$ALLOWED_ORIGINS' AEONIC_DEV_DOMAIN_ALIASES='$NEXUS_HOSTNAME=$PATIENT_DOMAIN_ALIAS_TARGET' .venv/bin/uvicorn app.main:app --reload$HOLD"
+  "cd '$REPO_ROOT/backend' && APP_ENV=development ALLOWED_ORIGINS='$ALLOWED_ORIGINS' NEXUS_DNS_TARGET='$NEXUS_DNS_TARGET' AEONIC_DEV_DOMAIN_ALIASES='$NEXUS_HOSTNAME=$PATIENT_DOMAIN_ALIAS_TARGET' .venv/bin/uvicorn app.main:app --reload$HOLD"
 
 tmux new-window -t "$SESSION_NAME" -n partner \
   "cd '$REPO_ROOT/apps/partner' && VITE_API_BASE_URL=http://127.0.0.1:8000 VITE_ALLOWED_HOSTS='$PARTNER_HOSTNAME' npm run dev$HOLD"

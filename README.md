@@ -118,6 +118,7 @@ The tmux startup script sets:
 - `VITE_API_BASE_URL=https://api-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Nexus
 - `VITE_ALLOWED_HOSTS=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Nexus Vite
 - `VITE_ALLOWED_HOSTS=partner-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Partner Vite
+- `NEXUS_DNS_TARGET=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for the backend CNAME instructions
 - `AEONIC_DEV_DOMAIN_ALIASES=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>=<AEONIC_PATIENT_DOMAIN_ALIAS_TARGET>` for the backend
 
 Daily startup:

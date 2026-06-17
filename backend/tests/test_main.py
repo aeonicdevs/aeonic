@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
+import app.main as main
 from app.main import create_app
 
 
@@ -121,6 +122,187 @@ def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:
     assert body["recordName"] == f"app-{suffix}.localhost"
     assert body["recordValue"] == "nexus.aeonichealthsystems.com"
     assert body["status"] == "connected"
+
+
+def test_partner_domain_setup_uses_configured_dns_target(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NEXUS_DNS_TARGET", "nexus-local.example.test")
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Configured Target",
+            "email": f"configured-target-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Configured Target Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+
+    setup = client.get(
+        "/partners/domain/setup",
+        headers={"Authorization": f"Bearer {partner_signup.json()['token']}"},
+    )
+
+    assert setup.status_code == 200
+    assert setup.json()["dns"] == {
+        "recordType": "CNAME",
+        "recordValue": "nexus-local.example.test",
+    }
+
+
+def test_partner_domain_verification_accepts_matching_cname(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NEXUS_DNS_TARGET", "nexus-local.example.test")
+    monkeypatch.setattr(
+        main,
+        "_resolve_cname_chain",
+        lambda host: ["nexus-local.example.test"] if host == "app.example.test" else [],
+    )
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. CNAME",
+            "email": f"cname-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "CNAME Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+    partner_token = partner_signup.json()["token"]
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_token}"},
+        json={"clinic_domain": "app.example.test"},
+    )
+    assert settings.status_code == 200
+
+    verification = client.post(
+        "/partners/domain/verify",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+
+    assert verification.status_code == 200
+    body = verification.json()["verification"]
+    assert body["status"] == "connected"
+    assert body["message"] == "DNS CNAME points to the Nexus target."
+
+
+def test_local_partner_domain_skips_cloudflare_custom_hostname(tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Local Domain",
+            "email": f"local-domain-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Local Domain Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+    partner_token = partner_signup.json()["token"]
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_token}"},
+        json={"clinic_domain": f"app-{suffix}.localhost"},
+    )
+    assert settings.status_code == 200
+
+    cloudflare = client.post(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+
+    assert cloudflare.status_code == 200
+    body = cloudflare.json()
+    assert body["verification"]["status"] == "connected"
+    assert body["cloudflare"]["status"] == "skipped"
+
+
+def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    clinic_domain = f"app-{suffix}.example.com"
+    calls = []
+
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    monkeypatch.setenv("CLOUDFLARE_ZONE_ID", "test-zone")
+    monkeypatch.setattr(main, "_resolve_ipv4", lambda host: {"203.0.113.42"})
+
+    def fake_cloudflare_api_request(method, path, payload=None, query=None):
+        calls.append({"method": method, "path": path, "payload": payload, "query": query})
+        if method == "GET" and query:
+            return {"success": True, "result": []}
+        return {
+            "success": True,
+            "result": {
+                "id": "023e105f4ecef8ad9ca31a8372d0c353",
+                "hostname": clinic_domain,
+                "status": "pending",
+                "ssl": {
+                    "method": "http",
+                    "status": "pending_validation",
+                    "validation_records": [
+                        {
+                            "http_url": f"http://{clinic_domain}/.well-known/cf-custom-hostname-challenge/test",
+                            "http_body": "token",
+                        }
+                    ],
+                },
+            },
+        }
+
+    monkeypatch.setattr(main, "_cloudflare_api_request", fake_cloudflare_api_request)
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Cloudflare Domain",
+            "email": f"cloudflare-domain-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Cloudflare Domain Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+    partner_token = partner_signup.json()["token"]
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_token}"},
+        json={"clinic_domain": clinic_domain},
+    )
+    assert settings.status_code == 200
+
+    cloudflare = client.post(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+
+    assert cloudflare.status_code == 200
+    body = cloudflare.json()
+    assert body["verification"]["status"] == "connected"
+    assert body["cloudflare"]["id"] == "023e105f4ecef8ad9ca31a8372d0c353"
+    assert body["cloudflare"]["status"] == "pending"
+    assert calls[1]["method"] == "POST"
+    assert calls[1]["path"] == "/zones/test-zone/custom_hostnames"
+    assert calls[1]["payload"]["hostname"] == clinic_domain
+    assert calls[1]["payload"]["ssl"]["method"] == "http"
+    assert calls[1]["payload"]["ssl"]["type"] == "dv"
+
+    stored = client.get(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+    assert stored.status_code == 200
+    assert stored.json()["cloudflare"]["id"] == "023e105f4ecef8ad9ca31a8372d0c353"
+    assert stored.json()["cloudflare"]["sslStatus"] == "pending_validation"
 
 
 def test_partner_account_persists_across_app_instances(tmp_path) -> None:
