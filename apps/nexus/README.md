@@ -14,6 +14,18 @@ npm install
 npm run dev
 ```
 
+For Cloudflare Tunnel development, use a per-developer Nexus hostname instead
+of a shared local hostname. Example:
+
+```sh
+VITE_API_BASE_URL=https://api.nathan.local.aeonichealthsystems.com \
+VITE_ALLOWED_HOSTS=nexus.nathan.local.aeonichealthsystems.com \
+npm run dev
+```
+
+Per-developer hostnames prevent Cloudflare from routing a shared local hostname
+to another developer's laptop when multiple tunnel connectors are running.
+
 ## Build
 
 ```sh
