@@ -293,6 +293,7 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
     assert calls[1]["method"] == "POST"
     assert calls[1]["path"] == "/zones/test-zone/custom_hostnames"
     assert calls[1]["payload"]["hostname"] == clinic_domain
+    assert "custom_metadata" not in calls[1]["payload"]
     assert calls[1]["payload"]["ssl"]["method"] == "http"
     assert calls[1]["payload"]["ssl"]["type"] == "dv"
 

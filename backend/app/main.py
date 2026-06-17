@@ -317,10 +317,9 @@ def _cloudflare_zone_path(path: str = "") -> str:
     return f"/zones/{zone_id}/custom_hostnames{path}"
 
 
-def _cloudflare_custom_hostname_payload(partner_id: str, domain: str) -> dict[str, Any]:
+def _cloudflare_custom_hostname_payload(domain: str) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "hostname": domain,
-        "custom_metadata": {"partner_id": partner_id},
         "ssl": {
             "method": os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_SSL_METHOD", "http"),
             "type": "dv",
@@ -383,7 +382,7 @@ def _get_cloudflare_custom_hostname(custom_hostname_id: str) -> dict[str, Any]:
     )
 
 
-def _create_cloudflare_custom_hostname(partner_id: str, domain: str) -> dict[str, Any]:
+def _create_cloudflare_custom_hostname(domain: str) -> dict[str, Any]:
     existing = _find_cloudflare_custom_hostname(domain)
     if existing is not None:
         return existing
@@ -392,7 +391,7 @@ def _create_cloudflare_custom_hostname(partner_id: str, domain: str) -> dict[str
         _cloudflare_api_request(
             "POST",
             _cloudflare_zone_path(),
-            payload=_cloudflare_custom_hostname_payload(partner_id, domain),
+            payload=_cloudflare_custom_hostname_payload(domain),
         )
     )
 
@@ -934,7 +933,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 if partner_domain is not None and partner_domain["cloudflare_custom_hostname_id"]:
                     result = _get_cloudflare_custom_hostname(partner_domain["cloudflare_custom_hostname_id"])
                 else:
-                    result = _create_cloudflare_custom_hostname(partner_id, domain)
+                    result = _create_cloudflare_custom_hostname(domain)
                 _persist_cloudflare_result(db, domain, result)
             except HTTPException as error:
                 _persist_cloudflare_error(db, domain, str(error.detail))
