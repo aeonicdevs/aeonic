@@ -106,18 +106,19 @@ scripts/setup-cloudflare-local-tunnel.sh
 
 This creates or updates the `~/.cloudflared/<AEONIC_TUNNEL_NAME>.yml` ingress rules and DNS routes for per-developer tunnel hostnames:
 
-- `api.<AEONIC_DEV_SUBDOMAIN>.local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:8000`
-- `nexus.<AEONIC_DEV_SUBDOMAIN>.local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:5173`
-- `partner.<AEONIC_DEV_SUBDOMAIN>.local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:5174`
-- `www.<AEONIC_DEV_SUBDOMAIN>.local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:3000`
+- `api-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:8000`
+- `nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:5173`
+- `partner-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:5174`
+- `www-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:3000`
 
 Use per-developer hostnames instead of one shared `nexus-local.<domain>` because multiple laptops running the same shared tunnel can cause Cloudflare to route requests to the wrong developer's local frontend, backend, or database. Per-developer hostnames keep each developer's browser, API calls, logs, and local data isolated.
 
 The tmux startup script sets:
 
-- `VITE_API_BASE_URL=https://api.<AEONIC_DEV_SUBDOMAIN>.local.<AEONIC_TEST_DOMAIN>` for Nexus
-- `VITE_ALLOWED_HOSTS=nexus.<AEONIC_DEV_SUBDOMAIN>.local.<AEONIC_TEST_DOMAIN>` for Vite
-- `AEONIC_DEV_DOMAIN_ALIASES=nexus.<AEONIC_DEV_SUBDOMAIN>.local.<AEONIC_TEST_DOMAIN>=<AEONIC_PATIENT_DOMAIN_ALIAS_TARGET>` for the backend
+- `VITE_API_BASE_URL=https://api-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Nexus
+- `VITE_ALLOWED_HOSTS=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Nexus Vite
+- `VITE_ALLOWED_HOSTS=partner-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Partner Vite
+- `AEONIC_DEV_DOMAIN_ALIASES=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>=<AEONIC_PATIENT_DOMAIN_ALIAS_TARGET>` for the backend
 
 Daily startup:
 
