@@ -890,6 +890,20 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
             domain = partner["clinic_domain"]
             partner_domain = _get_partner_domain(db, domain) if domain else None
+            if (
+                domain
+                and partner_domain is not None
+                and partner_domain["cloudflare_custom_hostname_id"]
+                and _cloudflare_configured()
+                and not _is_local_development_host(domain)
+            ):
+                try:
+                    result = _get_cloudflare_custom_hostname(partner_domain["cloudflare_custom_hostname_id"])
+                    _persist_cloudflare_result(db, domain, result)
+                    partner_domain = _get_partner_domain(db, domain)
+                except HTTPException as error:
+                    _persist_cloudflare_error(db, domain, str(error.detail))
+                    partner_domain = _get_partner_domain(db, domain)
             return {"cloudflare": _public_stored_cloudflare_custom_hostname(partner_domain, domain)}
 
     @app.post("/partners/domain/cloudflare-custom-hostname", tags=["partners"])

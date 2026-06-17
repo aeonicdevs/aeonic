@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 const TOKEN_KEY = 'aeonic.partner.token';
@@ -66,6 +66,7 @@ const domainSetup = ref<DomainSetup>({
 });
 const domainVerification = ref<DomainVerification | null>(null);
 const cloudflareHostname = ref<CloudflareCustomHostname | null>(null);
+let cloudflarePollTimer: ReturnType<typeof window.setInterval> | undefined;
 
 const signup = reactive({
   owner_name: '',
@@ -191,6 +192,20 @@ const cloudflareStatusCopy = computed(() => {
         message: cloudflareHostname.value?.message ?? 'Create the Cloudflare custom hostname after DNS is connected.',
       };
   }
+});
+
+const shouldPollCloudflare = computed(() => {
+  return Boolean(
+    partner.value?.clinicDomain
+    && cloudflareHostname.value?.id
+    && cloudflareHostname.value.status === 'pending',
+  );
+});
+
+const cloudflareActionLabel = computed(() => {
+  if (!cloudflareHostname.value?.id) return 'Confirm CNAME and create';
+  if (cloudflareHostname.value.status === 'active') return 'Refresh status';
+  return 'Refresh Cloudflare status';
 });
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -347,7 +362,7 @@ async function verifyDomain() {
   }
 }
 
-async function loadCloudflareHostname() {
+async function loadCloudflareHostname(options: { preserveOnError?: boolean } = {}) {
   if (!partner.value?.clinicDomain) {
     cloudflareHostname.value = null;
     return;
@@ -357,7 +372,9 @@ async function loadCloudflareHostname() {
     const body = await api<{ cloudflare: CloudflareCustomHostname }>('/partners/domain/cloudflare-custom-hostname');
     cloudflareHostname.value = body.cloudflare;
   } catch {
-    cloudflareHostname.value = null;
+    if (!options.preserveOnError) {
+      cloudflareHostname.value = null;
+    }
   }
 }
 
@@ -396,6 +413,19 @@ async function provisionCloudflareHostname() {
   }
 }
 
+function refreshCloudflarePolling() {
+  if (cloudflarePollTimer) {
+    window.clearInterval(cloudflarePollTimer);
+    cloudflarePollTimer = undefined;
+  }
+
+  if (!shouldPollCloudflare.value) return;
+
+  cloudflarePollTimer = window.setInterval(() => {
+    void loadCloudflareHostname({ preserveOnError: true });
+  }, 15000);
+}
+
 async function copyDnsValue(value: string | null) {
   if (!value) return;
 
@@ -424,6 +454,10 @@ async function restoreSession() {
 }
 
 function signOut() {
+  if (cloudflarePollTimer) {
+    window.clearInterval(cloudflarePollTimer);
+    cloudflarePollTimer = undefined;
+  }
   token.value = '';
   partner.value = null;
   domainVerification.value = null;
@@ -432,7 +466,14 @@ function signOut() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+watch(shouldPollCloudflare, refreshCloudflarePolling);
+
 onMounted(restoreSession);
+onUnmounted(() => {
+  if (cloudflarePollTimer) {
+    window.clearInterval(cloudflarePollTimer);
+  }
+});
 </script>
 
 <template>
@@ -682,10 +723,10 @@ onMounted(restoreSession);
                     color="primary"
                     :disabled="!partner.clinicDomain || cloudflareHostname?.status === 'skipped'"
                     :loading="provisioningCloudflare"
-                    prepend-icon="mdi-cloud-upload"
+                    :prepend-icon="cloudflareHostname?.id ? 'mdi-cloud-sync' : 'mdi-cloud-upload'"
                     @click="provisionCloudflareHostname"
                   >
-                    Confirm CNAME and create
+                    {{ cloudflareActionLabel }}
                   </v-btn>
                 </div>
               </div>
