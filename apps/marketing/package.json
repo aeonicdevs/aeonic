@@ -2,9 +2,12 @@
   "name": "@aeonic/marketing",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "nuxt dev --host 127.0.0.1",
-    "build": "nuxt generate && node scripts/copy-static-output.mjs",
+    "build": "nuxt generate && node scripts/verify-static-output.mjs && node scripts/copy-static-output.mjs",
     "generate": "nuxt generate",
     "generate:netlify": "npm run build",
     "preview": "nuxt preview --host 127.0.0.1"
