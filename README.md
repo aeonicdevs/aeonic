@@ -30,13 +30,16 @@ curl http://127.0.0.1:8000/health
 
 ## Marketing Site
 
-The public marketing site lives in `apps/site/` and is configured for Netlify in
-`netlify.toml`.
-
-Netlify build settings:
+The public marketing site lives in `apps/site/`. Configure its Netlify site with:
 
 - Base directory: `apps/site`
 - Build command: `npm run generate:netlify`
+- Publish directory: `dist`
+
+Configure the Nexus Netlify site separately:
+
+- Base directory: `apps/nexus`
+- Build command: `npm run build`
 - Publish directory: `dist`
 
 Run the same static build locally:

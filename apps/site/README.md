@@ -24,7 +24,7 @@ npm run dev
 npm run generate:netlify
 ```
 
-Netlify is configured from the repository root with `netlify.toml`.
+Configure the marketing Netlify site with:
 
 - Base directory: `apps/site`
 - Build command: `npm run generate:netlify`
