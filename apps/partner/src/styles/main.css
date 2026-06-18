@@ -142,6 +142,11 @@ body {
   gap: 12px;
 }
 
+.cloudflare-diagnostics {
+  margin: 0;
+  padding-left: 18px;
+}
+
 @media (max-width: 800px) {
   .setup-step {
     grid-template-columns: 1fr;

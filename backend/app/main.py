@@ -396,10 +396,47 @@ def _create_cloudflare_custom_hostname(domain: str) -> dict[str, Any]:
     )
 
 
-def _cloudflare_status_from_result(result: dict[str, Any]) -> CloudflareProvisioningStatus:
+def _stringify_cloudflare_detail(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("message", "error", "detail", "reason"):
+            if value.get(key):
+                return str(value[key])
+        return json.dumps(value, sort_keys=True)
+    return str(value)
+
+
+def _cloudflare_diagnostics_from_result(result: dict[str, Any], error: str | None = None) -> list[str]:
+    ssl = result.get("ssl") if isinstance(result.get("ssl"), dict) else {}
+    diagnostic_values: list[Any] = []
+    if error:
+        diagnostic_values.append(error)
+
+    for container in (result, ssl):
+        for key in ("verification_errors", "validation_errors", "errors"):
+            values = container.get(key)
+            if isinstance(values, list):
+                diagnostic_values.extend(values)
+            elif values:
+                diagnostic_values.append(values)
+
+    diagnostics: list[str] = []
+    for value in diagnostic_values:
+        message = _stringify_cloudflare_detail(value)
+        if message and message not in diagnostics:
+            diagnostics.append(message)
+    return diagnostics
+
+
+def _cloudflare_status_from_result(result: dict[str, Any], error: str | None = None) -> CloudflareProvisioningStatus:
     hostname_status = result.get("status")
     ssl = result.get("ssl") if isinstance(result.get("ssl"), dict) else {}
     ssl_status = ssl.get("status")
+    if _cloudflare_diagnostics_from_result(result, error):
+        return "needs_attention"
     if hostname_status == "active" and ssl_status == "active":
         return "active"
     if hostname_status in {"blocked", "test_blocked", "test_failed"}:
@@ -418,6 +455,7 @@ def _public_cloudflare_custom_hostname(
 ) -> dict[str, Any]:
     result = result or {}
     ssl = result.get("ssl") if isinstance(result.get("ssl"), dict) else {}
+    diagnostics = _cloudflare_diagnostics_from_result(result, error)
     return {
         "domain": domain,
         "status": status,
@@ -431,6 +469,7 @@ def _public_cloudflare_custom_hostname(
         "ownershipVerification": result.get("ownership_verification"),
         "ownershipVerificationHttp": result.get("ownership_verification_http"),
         "validationRecords": ssl.get("validation_records"),
+        "diagnostics": diagnostics,
         "error": error,
     }
 
@@ -635,10 +674,11 @@ def _public_stored_cloudflare_custom_hostname(
             "method": partner_domain["cloudflare_ssl_validation_method"],
         },
     }
-    status = _cloudflare_status_from_result(result)
+    diagnostics = _cloudflare_diagnostics_from_result(result, partner_domain["cloudflare_error"])
+    status = _cloudflare_status_from_result(result, partner_domain["cloudflare_error"])
     message = "Cloudflare hostname is active." if status == "active" else "Cloudflare is still provisioning SSL."
     if status == "needs_attention":
-        message = partner_domain["cloudflare_error"] or "Cloudflare needs attention before this hostname can go live."
+        message = diagnostics[0] if diagnostics else "Cloudflare needs attention before this hostname can go live."
     response = _public_cloudflare_custom_hostname(
         domain,
         status,
@@ -953,6 +993,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 _persist_cloudflare_error(db, domain, str(error.detail))
                 raise
 
+            diagnostics = _cloudflare_diagnostics_from_result(result)
             status = _cloudflare_status_from_result(result)
             message = (
                 "Cloudflare hostname is active."
@@ -960,7 +1001,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 else "Cloudflare accepted the hostname and is provisioning SSL."
             )
             if status == "needs_attention":
-                message = "Cloudflare accepted the hostname, but it needs attention before it can go live."
+                message = diagnostics[0] if diagnostics else "Cloudflare accepted the hostname, but it needs attention before it can go live."
 
             return {
                 "verification": verification,

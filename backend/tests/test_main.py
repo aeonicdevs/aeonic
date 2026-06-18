@@ -306,6 +306,69 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
     assert stored.json()["cloudflare"]["sslStatus"] == "pending_validation"
 
 
+def test_partner_cloudflare_validation_errors_are_visible(monkeypatch, tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    clinic_domain = f"validation-{suffix}.example.com"
+    diagnostics = [
+        "Certificate authority was unable to verify domain ownership from multiple geographic locations (MPIC failure). Please ensure your DNS records are reachable from all geographic perspectives and try again.",
+        "zone does not have a fallback origin set.",
+    ]
+
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    monkeypatch.setenv("CLOUDFLARE_ZONE_ID", "test-zone")
+    monkeypatch.setattr(main, "_resolve_ipv4", lambda host: {"203.0.113.42"})
+
+    def fake_cloudflare_api_request(method, path, payload=None, query=None):
+        if method == "GET" and query:
+            return {"success": True, "result": []}
+        return {
+            "success": True,
+            "result": {
+                "id": "validation-errors-id",
+                "hostname": clinic_domain,
+                "status": "pending",
+                "verification_errors": diagnostics,
+                "ssl": {
+                    "method": "http",
+                    "status": "pending_validation",
+                },
+            },
+        }
+
+    monkeypatch.setattr(main, "_cloudflare_api_request", fake_cloudflare_api_request)
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Validation",
+            "email": f"validation-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Validation Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+    partner_token = partner_signup.json()["token"]
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_token}"},
+        json={"clinic_domain": clinic_domain},
+    )
+    assert settings.status_code == 200
+
+    cloudflare = client.post(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+
+    assert cloudflare.status_code == 200
+    body = cloudflare.json()["cloudflare"]
+    assert body["status"] == "needs_attention"
+    assert body["message"] == diagnostics[0]
+    assert body["diagnostics"] == diagnostics
+
+
 def test_partner_account_persists_across_app_instances(tmp_path) -> None:
     database_path = tmp_path / "aeonic.sqlite3"
     suffix = uuid4().hex[:8]

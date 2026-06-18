@@ -47,6 +47,7 @@ type CloudflareCustomHostname = {
   sslStatus: string | null;
   sslValidationMethod: string | null;
   syncedAt: string | null;
+  diagnostics: string[];
   error: string | null;
 };
 
@@ -188,10 +189,19 @@ const cloudflareStatusCopy = computed(() => {
       return {
         color: 'info',
         icon: 'mdi-cloud-sync',
-        label: 'Ready to create',
+        label: cloudflareHostname.value?.id ? 'Provisioning' : 'Ready to create',
         message: cloudflareHostname.value?.message ?? 'Create the Cloudflare custom hostname after DNS is connected.',
       };
   }
+});
+
+const cloudflareDiagnostics = computed(() => {
+  const diagnostics = cloudflareHostname.value?.diagnostics ?? [];
+  const errorMessage = cloudflareHostname.value?.error;
+  if (errorMessage && !diagnostics.includes(errorMessage)) {
+    return [errorMessage, ...diagnostics];
+  }
+  return diagnostics;
 });
 
 const shouldPollCloudflare = computed(() => {
@@ -713,6 +723,18 @@ onUnmounted(() => {
                     <strong>{{ cloudflareHostname?.sslStatus || 'Pending creation' }}</strong>
                   </div>
                 </div>
+
+                <v-alert
+                  v-if="cloudflareDiagnostics.length"
+                  class="mt-4"
+                  type="warning"
+                  variant="tonal"
+                >
+                  <div class="font-weight-bold mb-2">Cloudflare validation needs attention</div>
+                  <ul class="cloudflare-diagnostics">
+                    <li v-for="diagnostic in cloudflareDiagnostics" :key="diagnostic">{{ diagnostic }}</li>
+                  </ul>
+                </v-alert>
 
                 <div class="d-flex flex-column flex-md-row align-md-center ga-3 mt-4">
                   <div class="text-body-2 text-medium-emphasis">
