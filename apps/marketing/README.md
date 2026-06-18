@@ -1,4 +1,4 @@
-# Aeonic Site
+# Aeonic Marketing
 
 Public marketing site for Aeonic.
 
@@ -26,7 +26,7 @@ npm run generate:netlify
 
 Configure the marketing Netlify site with:
 
-- Base directory: `apps/site`
+- Base directory: `apps/marketing`
 - Build command: `npm run generate:netlify`
 - Publish directory: `dist`
 

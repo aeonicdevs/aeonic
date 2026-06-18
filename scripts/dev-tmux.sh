@@ -87,7 +87,7 @@ else
 fi
 
 tmux new-session -d -s "$SESSION_NAME" -n www \
-  "cd '$REPO_ROOT/apps/site' && npm run dev$HOLD"
+  "cd '$REPO_ROOT/apps/marketing' && npm run dev$HOLD"
 
 tmux new-window -t "$SESSION_NAME" -n tunnel \
   "cloudflared --config '$CONFIG_FILE' tunnel run '$TUNNEL_NAME'$HOLD"

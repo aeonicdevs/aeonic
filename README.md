@@ -3,7 +3,7 @@
 This repo is split into:
 
 - `backend/` - FastAPI application
-- `apps/site/` - public marketing site
+- `apps/marketing/` - public marketing site
 - `apps/partner/` - partner app for clinic-owner signup, login, dashboard, and domain configuration
 - `apps/nexus/` - patient-facing Aeonic Nexus app that resolves the partner from the request host
 
@@ -30,9 +30,9 @@ curl http://127.0.0.1:8000/health
 
 ## Marketing Site
 
-The public marketing site lives in `apps/site/`. Configure its Netlify site with:
+The public marketing site lives in `apps/marketing/`. Configure its Netlify site with:
 
-- Base directory: `apps/site`
+- Base directory: `apps/marketing`
 - Build command: `npm run generate:netlify`
 - Publish directory: `dist`
 
@@ -45,7 +45,7 @@ Configure the Nexus Netlify site separately:
 Run the same static build locally:
 
 ```sh
-cd apps/site
+cd apps/marketing
 npm run generate:netlify
 ```
 
