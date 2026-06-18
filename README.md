@@ -34,7 +34,7 @@ The public marketing site lives in `apps/marketing/`. Configure its Netlify site
 
 - Base directory: `apps/marketing`
 - Build command: `npm run build`
-- Publish directory: `dist`
+- Publish directory: `.output/public`
 
 Configure the Nexus Netlify site separately:
 
