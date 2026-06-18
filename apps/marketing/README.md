@@ -27,11 +27,11 @@ npm run generate:netlify
 Configure the marketing Netlify site with:
 
 - Base directory: `apps/marketing`
-- Build command: `npm run generate:netlify`
-- Publish directory: `dist`
+- Build command: `npm run build`
+- Publish directory: `.output/public`
 
 This keeps the marketing site static and CDN-served. The Netlify build command
-generates Nuxt's static output and copies it into `dist/` so Netlify deploys a
-plain, explicit publish directory. If the site later needs runtime server
-behavior, switch the Netlify command to `npm run build` and let Nuxt/Nitro
-deploy the server renderer on Netlify.
+generates Nuxt's static output at `.output/public` and also copies it into
+`dist/` for local inspection or alternate static hosts. If the site later needs
+runtime server behavior, switch the build script back to `nuxt build` and let
+Nuxt/Nitro deploy the server renderer on Netlify.

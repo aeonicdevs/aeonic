@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "nuxt dev --host 127.0.0.1",
-    "build": "nuxt build",
+    "build": "nuxt generate && node scripts/copy-static-output.mjs",
     "generate": "nuxt generate",
-    "generate:netlify": "nuxt generate && node scripts/copy-static-output.mjs",
+    "generate:netlify": "npm run build",
     "preview": "nuxt preview --host 127.0.0.1"
   },
   "dependencies": {

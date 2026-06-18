@@ -33,8 +33,8 @@ curl http://127.0.0.1:8000/health
 The public marketing site lives in `apps/marketing/`. Configure its Netlify site with:
 
 - Base directory: `apps/marketing`
-- Build command: `npm run generate:netlify`
-- Publish directory: `dist`
+- Build command: `npm run build`
+- Publish directory: `.output/public`
 
 Configure the Nexus Netlify site separately:
 
