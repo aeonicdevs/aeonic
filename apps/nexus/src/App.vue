@@ -18,6 +18,17 @@ type Patient = {
   email: string;
 };
 
+type MedicationShipment = {
+  id: string;
+  clientProductId: string;
+  aroraPatientId: string | null;
+  aroraOrderId: string | null;
+  status: string;
+  dryRun: boolean;
+  response: { message?: string; expectedOutcome?: string } | null;
+  createdAt: string;
+};
+
 const queryHost = new URLSearchParams(window.location.search).get('clinicHost');
 const resolvedHost = queryHost || window.location.host;
 const tokenKey = `aeonic.patient.token.${resolvedHost}`;
@@ -25,9 +36,11 @@ const tokenKey = `aeonic.patient.token.${resolvedHost}`;
 const mode = ref<'signup' | 'login'>('signup');
 const loading = ref(false);
 const error = ref('');
+const shipmentMessage = ref('');
 const partner = ref<Partner | null>(null);
 const patient = ref<Patient | null>(null);
 const token = ref(localStorage.getItem(tokenKey) ?? '');
+const medicationShipment = ref<MedicationShipment | null>(null);
 
 const signup = reactive({
   name: '',
@@ -43,6 +56,11 @@ const login = reactive({
 const partnerLabel = computed(() => partner.value?.clinicName ?? 'Unconfigured clinic');
 const activeProtocol = computed(() => (patient.value ? 'New patient onboarding' : 'Awaiting sign in'));
 const clinicDomainLabel = computed(() => partner.value?.clinicDomain ?? resolvedHost);
+const shipmentModeLabel = computed(() => {
+  if (!medicationShipment.value) return 'Not started';
+  if (medicationShipment.value.status.startsWith('mock_')) return 'Mock order';
+  return medicationShipment.value.dryRun ? 'Dry run' : 'Live order';
+});
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -67,6 +85,11 @@ function setSession(nextToken: string, nextPatient: Patient, nextPartner: Partne
   patient.value = nextPatient;
   partner.value = nextPartner;
   localStorage.setItem(tokenKey, nextToken);
+}
+
+function resetShipmentFeedback() {
+  shipmentMessage.value = '';
+  medicationShipment.value = null;
 }
 
 async function loadContext() {
@@ -100,6 +123,7 @@ async function restoreSession() {
 async function submitSignup() {
   loading.value = true;
   error.value = '';
+  resetShipmentFeedback();
   try {
     const body = await api<{ token: string; patient: Patient; partner: Partner }>('/patients/signup', {
       method: 'POST',
@@ -116,6 +140,7 @@ async function submitSignup() {
 async function submitLogin() {
   loading.value = true;
   error.value = '';
+  resetShipmentFeedback();
   try {
     const body = await api<{ token: string; patient: Patient; partner: Partner }>('/patients/login', {
       method: 'POST',
@@ -132,7 +157,32 @@ async function submitLogin() {
 function signOut() {
   token.value = '';
   patient.value = null;
+  resetShipmentFeedback();
   localStorage.removeItem(tokenKey);
+}
+
+async function requestMedicationShipment() {
+  loading.value = true;
+  error.value = '';
+  shipmentMessage.value = '';
+  try {
+    const body = await api<{ medicationShipment: MedicationShipment }>('/patients/medication-shipments', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    medicationShipment.value = body.medicationShipment;
+    if (body.medicationShipment.status.startsWith('mock_')) {
+      shipmentMessage.value = 'Mock order created. No Arora request was sent.';
+    } else if (body.medicationShipment.dryRun) {
+      shipmentMessage.value = 'Dry run ready. Configure Arora credentials to place the paid product order.';
+    } else {
+      shipmentMessage.value = 'Arora order created. Provider review and pharmacy submission are now the next external steps.';
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to request medication shipment';
+  } finally {
+    loading.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -247,6 +297,48 @@ onMounted(async () => {
                 <div class="label mb-3">Clinic domain</div>
                 <div class="serif text-h5 mb-2">{{ clinicDomainLabel }}</div>
                 <div class="text-body-2 text-medium-emphasis">Resolved by the API before account creation.</div>
+              </v-card>
+            </v-col>
+          </v-row>
+
+          <v-row class="mt-2">
+            <v-col cols="12" md="8">
+              <v-card class="nexus-card pa-5">
+                <div class="label mb-3">Medication shipment</div>
+                <div class="serif text-h5 mb-2">Place order</div>
+                <div class="text-body-2 text-medium-emphasis mb-5">
+                  This creates the first mocked Arora product order for the signed-in patient.
+                </div>
+
+                <v-btn color="primary" prepend-icon="mdi-cart-check" :loading="loading" @click="requestMedicationShipment">
+                  Place order
+                </v-btn>
+
+                <v-alert v-if="shipmentMessage" class="mt-5" type="success" variant="tonal">
+                  {{ shipmentMessage }}
+                </v-alert>
+              </v-card>
+            </v-col>
+
+            <v-col cols="12" md="4">
+              <v-card class="nexus-card pa-5 h-100">
+                <div class="label mb-3">Arora status</div>
+                <template v-if="medicationShipment">
+                  <div class="serif text-h5 mb-2">{{ medicationShipment.status }}</div>
+                  <div class="text-body-2 text-medium-emphasis mb-3">
+                    {{ shipmentModeLabel }} · {{ medicationShipment.clientProductId }}
+                  </div>
+                  <v-list density="compact" class="pa-0 bg-transparent">
+                    <v-list-item title="Order ID" :subtitle="medicationShipment.aroraOrderId ?? 'Pending'" />
+                    <v-list-item title="Patient ID" :subtitle="medicationShipment.aroraPatientId ?? 'Pending'" />
+                  </v-list>
+                </template>
+                <template v-else>
+                  <div class="serif text-h5 mb-2">Not requested</div>
+                  <div class="text-body-2 text-medium-emphasis">
+                    The first shipment attempt will appear here after the request is submitted.
+                  </div>
+                </template>
               </v-card>
             </v-col>
           </v-row>

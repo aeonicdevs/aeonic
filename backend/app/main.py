@@ -60,6 +60,23 @@ class PatientLogin(BaseModel):
     password: str = Field(min_length=1)
 
 
+class PatientAddress(BaseModel):
+    street1: str | None = Field(default=None, min_length=1)
+    city: str | None = Field(default=None, min_length=1)
+    state: str | None = Field(default=None, min_length=2)
+    zip: str | None = Field(default=None, min_length=3)
+
+
+class PatientMedicationShipmentRequest(BaseModel):
+    phone: str | None = Field(default=None, min_length=7)
+    date_of_birth: str | None = Field(default=None, min_length=8)
+    address: PatientAddress | None = None
+    client_product_id: str | None = None
+    sex_at_birth: str | None = None
+    payment_status: str = "paid"
+    amount: str | None = None
+
+
 def _default_database_path() -> Path:
     configured_path = os.getenv("AEONIC_DATABASE_PATH")
     if configured_path:
@@ -119,6 +136,20 @@ def _initialize_database(database_path: str | Path) -> None:
                 token TEXT PRIMARY KEY,
                 principal_type TEXT NOT NULL CHECK (principal_type IN ('partner', 'patient')),
                 principal_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS medication_shipments (
+                id TEXT PRIMARY KEY,
+                partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+                patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                client_product_id TEXT NOT NULL,
+                arora_patient_id TEXT,
+                arora_order_id TEXT,
+                status TEXT NOT NULL,
+                dry_run INTEGER NOT NULL DEFAULT 1,
+                request_payload TEXT NOT NULL,
+                response_payload TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
@@ -181,6 +212,80 @@ def _public_patient(patient: sqlite3.Row) -> dict[str, str]:
         "name": patient["name"],
         "email": patient["email"],
     }
+
+
+def _split_patient_name(name: str) -> tuple[str, str]:
+    parts = [part for part in name.strip().split(" ") if part]
+    if not parts:
+        return "Patient", "Unknown"
+    if len(parts) == 1:
+        return parts[0], "Unknown"
+    return parts[0], " ".join(parts[1:])
+
+
+def _clean_optional(value: str | None) -> str | None:
+    cleaned = (value or "").strip()
+    return cleaned or None
+
+
+def _shipment_default(field_name: str, fallback: str) -> str:
+    return os.getenv(f"ARORA_MOCK_{field_name}", fallback).strip() or fallback
+
+
+def _public_medication_shipment(shipment: sqlite3.Row) -> dict[str, Any]:
+    response_payload = shipment["response_payload"]
+    return {
+        "id": shipment["id"],
+        "patientId": shipment["patient_id"],
+        "partnerId": shipment["partner_id"],
+        "clientProductId": shipment["client_product_id"],
+        "aroraPatientId": shipment["arora_patient_id"],
+        "aroraOrderId": shipment["arora_order_id"],
+        "status": shipment["status"],
+        "dryRun": bool(shipment["dry_run"]),
+        "request": json.loads(shipment["request_payload"]),
+        "response": json.loads(response_payload) if response_payload else None,
+        "createdAt": shipment["created_at"],
+    }
+
+
+def _arora_patient_payload(
+    patient: sqlite3.Row,
+    payload: PatientMedicationShipmentRequest,
+) -> dict[str, Any]:
+    first_name, last_name = _split_patient_name(patient["name"])
+    address = payload.address or PatientAddress()
+    patient_payload: dict[str, Any] = {
+        "email": patient["email"],
+        "firstName": first_name,
+        "lastName": last_name,
+        "phone": _clean_optional(payload.phone) or _shipment_default("PATIENT_PHONE", "5551234567"),
+        "partnerPatientId": patient["id"],
+        "dateOfBirth": _clean_optional(payload.date_of_birth) or _shipment_default("PATIENT_DATE_OF_BIRTH", "1990-01-01"),
+        "address": {
+            "street1": _clean_optional(address.street1) or _shipment_default("PATIENT_STREET1", "123 Mockingbird Lane"),
+            "city": _clean_optional(address.city) or _shipment_default("PATIENT_CITY", "Austin"),
+            "state": _clean_optional(address.state) or _shipment_default("PATIENT_STATE", "TX"),
+            "zip": _clean_optional(address.zip) or _shipment_default("PATIENT_ZIP", "78701"),
+        },
+    }
+    if payload.sex_at_birth:
+        patient_payload["sexAtBirth"] = payload.sex_at_birth.strip()
+    return {"patient": patient_payload, "send_email": False}
+
+
+def _arora_order_payload(
+    patient_id: str,
+    client_product_id: str,
+    payload: PatientMedicationShipmentRequest,
+) -> dict[str, Any]:
+    order: dict[str, Any] = {
+        "clientProductId": client_product_id,
+        "payment_status": _clean_optional(payload.payment_status) or "paid",
+    }
+    if payload.amount:
+        order["amount"] = payload.amount.strip()
+    return {"patient_id": patient_id, "order": order}
 
 
 def _nexus_dns_target() -> str:
@@ -262,6 +367,71 @@ def _cloudflare_base_url() -> str:
     return os.getenv("CLOUDFLARE_API_BASE_URL", "https://api.cloudflare.com/client/v4").rstrip("/")
 
 
+def _arora_base_url() -> str:
+    return os.getenv("ARORA_API_BASE_URL", "https://api.gen-health.app").rstrip("/")
+
+
+def _arora_configured() -> bool:
+    return bool(os.getenv("ARORA_API_KEY") and os.getenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID"))
+
+
+def _arora_run_mode() -> Literal["mock", "dry_run", "live"]:
+    configured = os.getenv("ARORA_API_MODE")
+    if configured:
+        mode = configured.strip().lower()
+        if mode in {"mock", "dry_run", "live"}:
+            return mode  # type: ignore[return-value]
+
+    legacy_dry_run = os.getenv("ARORA_DRY_RUN")
+    if legacy_dry_run is not None:
+        return "dry_run" if legacy_dry_run.strip().lower() not in {"0", "false", "no", "off"} else "live"
+
+    return "live" if _arora_configured() else "mock"
+
+
+def _arora_mock_enabled() -> bool:
+    return _arora_run_mode() == "mock"
+
+
+def _arora_dry_run_enabled() -> bool:
+    return _arora_run_mode() == "dry_run"
+
+
+def _mock_arora_patient_response(patient_payload: dict[str, Any]) -> dict[str, Any]:
+    patient = patient_payload["patient"]
+    return {
+        "success": True,
+        "message": "Mock Arora patient created",
+        "data": {
+            "patientId": f"mock_patient_{patient['partnerPatientId']}",
+            "partnerPatientId": patient["partnerPatientId"],
+            "status": "pending",
+            "emailSent": False,
+            "magicLink": None,
+        },
+    }
+
+
+def _mock_arora_order_response(order_payload: dict[str, Any]) -> dict[str, Any]:
+    order_id = f"mock_order_{uuid.uuid4().hex[:12]}"
+    order = order_payload["order"]
+    return {
+        "success": True,
+        "data": {
+            "orderId": order_id,
+            "patientId": order_payload["patient_id"],
+            "clientProductId": order["clientProductId"],
+            "orderType": "product",
+            "orderStatus": "pending_review",
+            "paymentStatus": order["payment_status"],
+            "paymentVerificationStatus": "not_required",
+            "requiredActions": [],
+            "reviewRequired": "async",
+            "prescriptions": [],
+        },
+    }
+
+
 def _cloudflare_api_request(
     method: str,
     path: str,
@@ -308,6 +478,47 @@ def _cloudflare_api_request(
         ) from error
     except urllib.error.URLError as error:
         raise HTTPException(status_code=502, detail=f"Cloudflare request failed: {error.reason}") from error
+
+
+def _arora_api_request(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    query: dict[str, str | int] | None = None,
+) -> dict[str, Any]:
+    token = os.getenv("ARORA_API_KEY")
+    if not token:
+        raise HTTPException(status_code=503, detail="Arora API key is not configured")
+
+    url = f"{_arora_base_url()}{path}"
+    if query:
+        url = f"{url}?{urllib.parse.urlencode(query)}"
+
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "X-API-Key": token,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError:
+            parsed = {"detail": body or error.reason}
+        detail = parsed.get("detail") or parsed.get("message") or parsed.get("error") or parsed
+        raise HTTPException(status_code=502, detail=f"Arora request failed: {detail}") from error
+    except urllib.error.URLError as error:
+        raise HTTPException(status_code=502, detail=f"Arora request failed: {error.reason}") from error
 
 
 def _cloudflare_zone_path(path: str = "") -> str:
@@ -1223,6 +1434,138 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 "patient": _public_patient(patient),
                 "partner": _public_partner(partner),
             }
+
+    @app.post("/patients/medication-shipments", tags=["patients"])
+    def patient_medication_shipment(
+        payload: PatientMedicationShipmentRequest,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        run_mode = _arora_run_mode()
+        dry_run = run_mode == "dry_run"
+        mock_run = run_mode == "mock"
+        configured_client_product_id = payload.client_product_id or os.getenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID")
+        if run_mode == "live" and not configured_client_product_id:
+            raise HTTPException(status_code=422, detail="Arora client product ID is required")
+
+        client_product_id = (
+            configured_client_product_id
+            or ("mock_client_product_order" if mock_run else "configure-arora-client-product-id")
+        ).strip()
+        if not client_product_id:
+            raise HTTPException(status_code=422, detail="Arora client product ID is required")
+
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            partner = _get_partner_by_id(db, patient["partner_id"])
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            arora_patient_payload = _arora_patient_payload(patient, payload)
+            arora_order_payload = _arora_order_payload(patient["id"], client_product_id, payload)
+            request_payload = {
+                "patientEndpoint": "POST /v2/client/patients",
+                "orderEndpoint": "POST /v2/client/orders",
+                "patient": arora_patient_payload,
+                "order": arora_order_payload,
+            }
+
+            shipment_id = uuid.uuid4().hex
+            db.execute(
+                """
+                INSERT INTO medication_shipments (
+                    id, partner_id, patient_id, client_product_id, status, dry_run, request_payload
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    shipment_id,
+                    partner["id"],
+                    patient["id"],
+                    client_product_id,
+                    "dry_run_ready" if dry_run else "creating_mock_order" if mock_run else "creating_arora_order",
+                    int(dry_run),
+                    json.dumps(request_payload, sort_keys=True),
+                ),
+            )
+
+            if dry_run:
+                response_payload = {
+                    "message": "Dry run only. Set ARORA_API_KEY, ARORA_DEFAULT_CLIENT_PRODUCT_ID, and ARORA_DRY_RUN=false to create the order in Arora.",
+                    "expectedOutcome": "A paid product order enters Arora/GEN clinical review; prescription shipment follows provider approval and pharmacy submission.",
+                }
+                db.execute(
+                    """
+                    UPDATE medication_shipments
+                    SET response_payload = ?
+                    WHERE id = ?
+                    """,
+                    (json.dumps(response_payload, sort_keys=True), shipment_id),
+                )
+            elif mock_run:
+                arora_patient = _mock_arora_patient_response(arora_patient_payload)
+                arora_patient_id = arora_patient["data"]["patientId"]
+                arora_order_payload = _arora_order_payload(arora_patient_id, client_product_id, payload)
+                arora_order = _mock_arora_order_response(arora_order_payload)
+                arora_order_id = arora_order["data"]["orderId"]
+                response_payload = {
+                    "patient": arora_patient,
+                    "order": arora_order,
+                    "expectedOutcome": "Mock order accepted. In live Arora, this paid product order would enter clinical review before prescription submission and pharmacy shipment.",
+                }
+                db.execute(
+                    """
+                    UPDATE medication_shipments
+                    SET arora_patient_id = ?, arora_order_id = ?, status = ?, dry_run = 0, response_payload = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        arora_patient_id,
+                        arora_order_id,
+                        "mock_order_created",
+                        json.dumps(response_payload, sort_keys=True),
+                        shipment_id,
+                    ),
+                )
+            else:
+                arora_patient = _arora_api_request("POST", "/v2/client/patients", arora_patient_payload)
+                arora_patient_id = (
+                    arora_patient.get("data", {}).get("patientId")
+                    if isinstance(arora_patient.get("data"), dict)
+                    else None
+                ) or patient["id"]
+                arora_order_payload = _arora_order_payload(arora_patient_id, client_product_id, payload)
+                arora_order = _arora_api_request("POST", "/v2/client/orders", arora_order_payload)
+                arora_order_data = arora_order.get("data", {}) if isinstance(arora_order.get("data"), dict) else {}
+                arora_order_id = arora_order_data.get("orderId")
+                response_payload = {
+                    "patient": arora_patient,
+                    "order": arora_order,
+                    "expectedOutcome": "A paid product order enters Arora/GEN clinical review; prescription shipment follows provider approval and pharmacy submission.",
+                }
+                db.execute(
+                    """
+                    UPDATE medication_shipments
+                    SET arora_patient_id = ?, arora_order_id = ?, status = ?, dry_run = 0, response_payload = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        arora_patient_id,
+                        arora_order_id,
+                        "order_created",
+                        json.dumps(response_payload, sort_keys=True),
+                        shipment_id,
+                    ),
+                )
+
+            shipment = db.execute("SELECT * FROM medication_shipments WHERE id = ?", (shipment_id,)).fetchone()
+            if shipment is None:
+                raise HTTPException(status_code=500, detail="Unable to create medication shipment request")
+
+            return {"medicationShipment": _public_medication_shipment(shipment)}
 
     return app
 

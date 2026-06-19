@@ -91,6 +91,164 @@ def test_partner_configures_domain_and_patient_authenticates() -> None:
     assert me.json()["patient"]["name"] == "Mira Chen"
 
 
+def _create_patient_session(client: TestClient, suffix: str) -> tuple[str, str]:
+    clinic_domain = f"care-{suffix}.example.com"
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Care",
+            "email": f"care-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Care Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_signup.json()['token']}"},
+        json={"clinic_domain": clinic_domain},
+    )
+    assert settings.status_code == 200
+
+    patient_signup = client.post(
+        "/patients/signup",
+        json={
+            "host": clinic_domain,
+            "name": "Mira Chen",
+            "email": f"mira-care-{suffix}@example.com",
+            "password": "secret123",
+        },
+    )
+    assert patient_signup.status_code == 200
+    return patient_signup.json()["token"], patient_signup.json()["patient"]["id"]
+
+
+def test_patient_medication_shipment_defaults_to_mock_order(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("ARORA_API_MODE", raising=False)
+    monkeypatch.delenv("ARORA_API_KEY", raising=False)
+    monkeypatch.delenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID", raising=False)
+    monkeypatch.delenv("ARORA_DRY_RUN", raising=False)
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    patient_token, patient_id = _create_patient_session(client, suffix)
+
+    response = client.post(
+        "/patients/medication-shipments",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={},
+    )
+
+    assert response.status_code == 200
+    shipment = response.json()["medicationShipment"]
+    assert shipment["dryRun"] is False
+    assert shipment["status"] == "mock_order_created"
+    assert shipment["patientId"] == patient_id
+    assert shipment["aroraPatientId"] == f"mock_patient_{patient_id}"
+    assert shipment["aroraOrderId"].startswith("mock_order_")
+    assert shipment["clientProductId"] == "mock_client_product_order"
+    assert shipment["request"]["patientEndpoint"] == "POST /v2/client/patients"
+    assert shipment["request"]["orderEndpoint"] == "POST /v2/client/orders"
+    assert shipment["request"]["patient"]["patient"]["partnerPatientId"] == patient_id
+    assert shipment["request"]["patient"]["patient"]["phone"] == "5551234567"
+    assert shipment["request"]["patient"]["patient"]["dateOfBirth"] == "1990-01-01"
+    assert shipment["request"]["order"]["order"]["payment_status"] == "paid"
+    assert shipment["response"]["order"]["data"]["orderStatus"] == "pending_review"
+    assert shipment["response"]["order"]["data"]["requiredActions"] == []
+
+
+def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ARORA_API_MODE", "live")
+    monkeypatch.setenv("ARORA_API_KEY", "test-arora-key")
+    monkeypatch.setenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID", "clientA_network1_prodX")
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    patient_token, patient_id = _create_patient_session(client, suffix)
+    calls = []
+
+    def fake_arora_api_request(method, path, payload=None, query=None):
+        calls.append({"method": method, "path": path, "payload": payload, "query": query})
+        if path == "/v2/client/patients":
+            return {"success": True, "data": {"patientId": "arora_patient_123"}}
+        if path == "/v2/client/orders":
+            return {
+                "success": True,
+                "data": {
+                    "orderId": "order456",
+                    "patientId": "arora_patient_123",
+                    "clientProductId": payload["order"]["clientProductId"],
+                    "orderStatus": "pending_review",
+                    "paymentStatus": "paid",
+                    "requiredActions": [],
+                },
+            }
+        raise AssertionError(f"Unexpected Arora path {path}")
+
+    monkeypatch.setattr(main, "_arora_api_request", fake_arora_api_request)
+
+    response = client.post(
+        "/patients/medication-shipments",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={
+            "phone": "5551234567",
+            "date_of_birth": "1990-05-15",
+            "sex_at_birth": "female",
+            "address": {
+                "street1": "123 Main Street",
+                "city": "Austin",
+                "state": "TX",
+                "zip": "78701",
+            },
+            "amount": "199.00",
+        },
+    )
+
+    assert response.status_code == 200
+    shipment = response.json()["medicationShipment"]
+    assert shipment["dryRun"] is False
+    assert shipment["status"] == "order_created"
+    assert shipment["aroraPatientId"] == "arora_patient_123"
+    assert shipment["aroraOrderId"] == "order456"
+    assert calls == [
+        {
+            "method": "POST",
+            "path": "/v2/client/patients",
+            "payload": {
+                "patient": {
+                    "email": f"mira-care-{suffix}@example.com",
+                    "firstName": "Mira",
+                    "lastName": "Chen",
+                    "phone": "5551234567",
+                    "partnerPatientId": patient_id,
+                    "dateOfBirth": "1990-05-15",
+                    "address": {
+                        "street1": "123 Main Street",
+                        "city": "Austin",
+                        "state": "TX",
+                        "zip": "78701",
+                    },
+                    "sexAtBirth": "female",
+                },
+                "send_email": False,
+            },
+            "query": None,
+        },
+        {
+            "method": "POST",
+            "path": "/v2/client/orders",
+            "payload": {
+                "patient_id": "arora_patient_123",
+                "order": {
+                    "clientProductId": "clientA_network1_prodX",
+                    "payment_status": "paid",
+                    "amount": "199.00",
+                },
+            },
+            "query": None,
+        },
+    ]
+
+
 def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]
