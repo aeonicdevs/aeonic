@@ -7,10 +7,8 @@
   },
   "scripts": {
     "dev": "nuxt dev --host 127.0.0.1",
-    "build": "npm run generate",
-    "generate": "nuxt generate && node scripts/verify-static-output.mjs && node scripts/copy-static-output.mjs",
-    "generate:netlify": "npm run build",
-    "generate:nuxt": "nuxt generate",
+    "build": "nuxt generate",
+    "generate": "nuxt generate",
     "preview": "nuxt preview --host 127.0.0.1"
   },
   "dependencies": {

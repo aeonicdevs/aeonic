@@ -31,7 +31,6 @@ Configure the marketing Netlify site with:
 - Publish directory: `.output/public`
 
 This keeps the marketing site static and CDN-served. The Netlify build command
-generates Nuxt's static output at `.output/public` and also copies it into
-`dist/` for local inspection or alternate static hosts. If the site later needs
-runtime server behavior, switch the build script back to `nuxt build` and let
+generates Nuxt's static output at `.output/public`. If the site later needs
+runtime server behavior, switch the build script to `nuxt build` and let
 Nuxt/Nitro deploy the server renderer on Netlify.
