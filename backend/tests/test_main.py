@@ -315,6 +315,12 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
     assert stored.status_code == 200
     assert stored.json()["cloudflare"]["id"] == "023e105f4ecef8ad9ca31a8372d0c353"
     assert stored.json()["cloudflare"]["sslStatus"] == "pending_validation"
+    assert stored.json()["cloudflare"]["validationRecords"] == [
+        {
+            "http_url": f"http://{clinic_domain}/.well-known/cf-custom-hostname-challenge/test",
+            "http_body": "token",
+        }
+    ]
 
 
 def test_partner_recreates_stale_cloudflare_custom_hostname(monkeypatch, tmp_path) -> None:

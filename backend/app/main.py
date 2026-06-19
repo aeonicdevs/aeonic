@@ -479,6 +479,19 @@ def _public_cloudflare_custom_hostname(
     }
 
 
+def _public_cloudflare_custom_hostname_from_result(domain: str, result: dict[str, Any]) -> dict[str, Any]:
+    status = _cloudflare_status_from_result(result)
+    message = (
+        "Cloudflare hostname is active."
+        if status == "active"
+        else "Cloudflare is still provisioning SSL."
+    )
+    diagnostics = _cloudflare_diagnostics_from_result(result)
+    if status == "needs_attention":
+        message = diagnostics[0] if diagnostics else "Cloudflare needs attention before this hostname can go live."
+    return _public_cloudflare_custom_hostname(domain, status, message, result=result)
+
+
 def _persist_cloudflare_result(
     db: sqlite3.Connection,
     domain: str,
@@ -1006,12 +1019,13 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 try:
                     result = _get_cloudflare_custom_hostname(partner_domain["cloudflare_custom_hostname_id"])
                     _persist_cloudflare_result(db, domain, result)
-                    partner_domain = _get_partner_domain(db, domain)
+                    return {"cloudflare": _public_cloudflare_custom_hostname_from_result(domain, result)}
                 except HTTPException as error:
                     if _is_cloudflare_not_found_error(error):
                         existing = _find_cloudflare_custom_hostname(domain)
                         if existing is not None:
                             _persist_cloudflare_result(db, domain, existing)
+                            return {"cloudflare": _public_cloudflare_custom_hostname_from_result(domain, existing)}
                         else:
                             _clear_cloudflare_custom_hostname(db, domain, str(error.detail))
                     else:
