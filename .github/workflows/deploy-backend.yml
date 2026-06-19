@@ -97,6 +97,6 @@ jobs:
           ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
           set -euo pipefail
           cd "$REMOTE_PATH"
-          docker compose up -d --build backend
+          docker compose up -d --build backend caddy
           docker image prune -f
           EOF

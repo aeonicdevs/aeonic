@@ -6,8 +6,9 @@ services:
     environment:
       APP_ENV: production
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://partner.aeonichealthsystems.com,https://nexus.aeonichealthsystems.com,https://www.aeonichealthsystems.com,https://aeonichealthsystems.com}
+    expose:
+      - "8000"
     ports:
-      - "80:8000"
       - "8000:8000"
     restart: unless-stopped
     healthcheck:
@@ -16,3 +17,21 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: aeonic-caddy
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
