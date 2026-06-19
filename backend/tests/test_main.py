@@ -483,6 +483,73 @@ def test_partner_cloudflare_validation_errors_are_visible(monkeypatch, tmp_path)
     assert body["diagnostics"] == diagnostics
 
 
+def test_transient_cloudflare_ca_error_stays_pending(monkeypatch, tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    clinic_domain = f"ca-retry-{suffix}.example.com"
+    diagnostic = "Internal error with Certificate Authority. Please check later."
+
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    monkeypatch.setenv("CLOUDFLARE_ZONE_ID", "test-zone")
+    monkeypatch.setattr(main, "_resolve_ipv4", lambda host: {"203.0.113.42"})
+
+    def fake_cloudflare_api_request(method, path, payload=None, query=None):
+        if method == "GET" and query:
+            return {"success": True, "result": []}
+        return {
+            "success": True,
+            "result": {
+                "id": "ca-retry-id",
+                "hostname": clinic_domain,
+                "status": "active",
+                "ssl": {
+                    "method": "txt",
+                    "status": "pending_validation",
+                    "validation_errors": [diagnostic],
+                    "validation_records": [
+                        {
+                            "status": "pending",
+                            "txt_name": f"_acme-challenge.{clinic_domain}",
+                            "txt_value": "token",
+                        }
+                    ],
+                },
+            },
+        }
+
+    monkeypatch.setattr(main, "_cloudflare_api_request", fake_cloudflare_api_request)
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. CA Retry",
+            "email": f"ca-retry-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "CA Retry Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+    partner_token = partner_signup.json()["token"]
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_token}"},
+        json={"clinic_domain": clinic_domain},
+    )
+    assert settings.status_code == 200
+
+    cloudflare = client.post(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+
+    assert cloudflare.status_code == 200
+    body = cloudflare.json()["cloudflare"]
+    assert body["status"] == "pending"
+    assert body["message"] == "Cloudflare accepted the hostname and is provisioning SSL."
+    assert body["diagnostics"] == [diagnostic]
+
+
 def test_partner_account_persists_across_app_instances(tmp_path) -> None:
     database_path = tmp_path / "aeonic.sqlite3"
     suffix = uuid4().hex[:8]

@@ -449,11 +449,22 @@ def _cloudflare_diagnostics_from_result(result: dict[str, Any], error: str | Non
     return diagnostics
 
 
+def _is_transient_cloudflare_ca_error(message: str) -> bool:
+    normalized = message.lower()
+    return "internal error with certificate authority" in normalized or (
+        "certificate authority" in normalized and "check later" in normalized
+    )
+
+
 def _cloudflare_status_from_result(result: dict[str, Any], error: str | None = None) -> CloudflareProvisioningStatus:
     hostname_status = result.get("status")
     ssl = result.get("ssl") if isinstance(result.get("ssl"), dict) else {}
     ssl_status = ssl.get("status")
-    if _cloudflare_diagnostics_from_result(result, error):
+    diagnostics = _cloudflare_diagnostics_from_result(result, error)
+    actionable_diagnostics = [
+        diagnostic for diagnostic in diagnostics if not _is_transient_cloudflare_ca_error(diagnostic)
+    ]
+    if actionable_diagnostics:
         return "needs_attention"
     if hostname_status == "active" and ssl_status == "active":
         return "active"
