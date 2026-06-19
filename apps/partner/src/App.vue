@@ -765,6 +765,11 @@ onUnmounted(() => {
                     Create these TXT records with the DNS provider for {{ cloudflareHostname?.domain || partner.clinicDomain }}.
                     Cloudflare will finish SSL validation after they are visible.
                   </div>
+                  <div class="text-body-2 text-medium-emphasis mb-3">
+                    These values can change while Cloudflare retries certificate issuance. If DNS already has
+                    older TXT values for this name, replace them with the current values below and remove stale
+                    values that are no longer listed.
+                  </div>
 
                   <div class="validation-record-list">
                     <div
