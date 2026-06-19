@@ -317,6 +317,15 @@ def _cloudflare_zone_path(path: str = "") -> str:
     return f"/zones/{zone_id}/custom_hostnames{path}"
 
 
+def _cloudflare_custom_hostname_origin_payload() -> dict[str, str]:
+    origin = _normalize_host(os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", _nexus_dns_target()))
+    origin_sni = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI", origin).strip()
+    return {
+        "custom_origin_server": origin,
+        "custom_origin_sni": origin_sni,
+    }
+
+
 def _cloudflare_custom_hostname_payload(domain: str) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "hostname": domain,
@@ -335,13 +344,7 @@ def _cloudflare_custom_hostname_payload(domain: str) -> dict[str, Any]:
     if certificate_authority:
         payload["ssl"]["certificate_authority"] = certificate_authority
 
-    custom_origin_server = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN")
-    if custom_origin_server:
-        payload["custom_origin_server"] = _normalize_host(custom_origin_server)
-
-    custom_origin_sni = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI")
-    if custom_origin_sni:
-        payload["custom_origin_sni"] = custom_origin_sni.strip()
+    payload.update(_cloudflare_custom_hostname_origin_payload())
 
     return payload
 
@@ -386,11 +389,13 @@ def _refresh_cloudflare_custom_hostname_validation(custom_hostname_id: str, curr
     ssl = current.get("ssl") if isinstance(current.get("ssl"), dict) else {}
     method = ssl.get("method") if isinstance(ssl.get("method"), str) else "http"
     ssl_type = ssl.get("type") if isinstance(ssl.get("type"), str) else "dv"
+    payload: dict[str, Any] = {"ssl": {"method": method, "type": ssl_type}}
+    payload.update(_cloudflare_custom_hostname_origin_payload())
     return _extract_cloudflare_result(
         _cloudflare_api_request(
             "PATCH",
             _cloudflare_zone_path(f"/{custom_hostname_id}"),
-            payload={"ssl": {"method": method, "type": ssl_type}},
+            payload=payload,
         )
     )
 
