@@ -130,6 +130,7 @@ jobs:
             docker cp aeonic-backend:/app/.data/aeonic.sqlite3 .deploy-data/aeonic.sqlite3 2>/dev/null || true
           fi
           docker compose up -d --build backend nexus caddy
+          docker compose restart caddy
           if [ -f .deploy-data/aeonic.sqlite3 ]; then
             docker cp .deploy-data/aeonic.sqlite3 aeonic-backend:/app/.data/aeonic.sqlite3
             docker compose restart backend
