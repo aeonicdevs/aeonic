@@ -251,6 +251,20 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
         calls.append({"method": method, "path": path, "payload": payload, "query": query})
         if method == "GET" and query:
             return {"success": True, "result": []}
+        if method == "PATCH":
+            return {
+                "success": True,
+                "result": {
+                    "id": "023e105f4ecef8ad9ca31a8372d0c353",
+                    "hostname": clinic_domain,
+                    "status": "active",
+                    "ssl": {
+                        "method": payload["ssl"]["method"],
+                        "type": payload["ssl"]["type"],
+                        "status": "active",
+                    },
+                },
+            }
         return {
             "success": True,
             "result": {
@@ -321,6 +335,16 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
             "http_body": "token",
         }
     ]
+
+    refreshed = client.post(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json()["cloudflare"]["status"] == "active"
+    assert calls[-1]["method"] == "PATCH"
+    assert calls[-1]["path"] == "/zones/test-zone/custom_hostnames/023e105f4ecef8ad9ca31a8372d0c353"
+    assert calls[-1]["payload"] == {"ssl": {"method": "http", "type": "dv"}}
 
 
 def test_partner_recreates_stale_cloudflare_custom_hostname(monkeypatch, tmp_path) -> None:

@@ -382,6 +382,19 @@ def _get_cloudflare_custom_hostname(custom_hostname_id: str) -> dict[str, Any]:
     )
 
 
+def _refresh_cloudflare_custom_hostname_validation(custom_hostname_id: str, current: dict[str, Any]) -> dict[str, Any]:
+    ssl = current.get("ssl") if isinstance(current.get("ssl"), dict) else {}
+    method = ssl.get("method") if isinstance(ssl.get("method"), str) else "http"
+    ssl_type = ssl.get("type") if isinstance(ssl.get("type"), str) else "dv"
+    return _extract_cloudflare_result(
+        _cloudflare_api_request(
+            "PATCH",
+            _cloudflare_zone_path(f"/{custom_hostname_id}"),
+            payload={"ssl": {"method": method, "type": ssl_type}},
+        )
+    )
+
+
 def _is_cloudflare_not_found_error(error: HTTPException) -> bool:
     detail = str(error.detail).lower()
     return "not found" in detail or "could not be found" in detail
@@ -1074,6 +1087,12 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 if partner_domain is not None and partner_domain["cloudflare_custom_hostname_id"]:
                     try:
                         result = _get_cloudflare_custom_hostname(partner_domain["cloudflare_custom_hostname_id"])
+                        status = _cloudflare_status_from_result(result)
+                        if status == "pending":
+                            result = _refresh_cloudflare_custom_hostname_validation(
+                                partner_domain["cloudflare_custom_hostname_id"],
+                                result,
+                            )
                     except HTTPException as error:
                         if not _is_cloudflare_not_found_error(error):
                             raise
