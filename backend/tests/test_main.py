@@ -317,6 +317,79 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
     assert stored.json()["cloudflare"]["sslStatus"] == "pending_validation"
 
 
+def test_partner_recreates_stale_cloudflare_custom_hostname(monkeypatch, tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    clinic_domain = f"stale-{suffix}.example.com"
+    calls = []
+
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    monkeypatch.setenv("CLOUDFLARE_ZONE_ID", "test-zone")
+    monkeypatch.setattr(main, "_resolve_ipv4", lambda host: {"203.0.113.42"})
+
+    def result(custom_hostname_id: str) -> dict:
+        return {
+            "success": True,
+            "result": {
+                "id": custom_hostname_id,
+                "hostname": clinic_domain,
+                "status": "pending",
+                "ssl": {
+                    "method": "http",
+                    "status": "pending_validation",
+                },
+            },
+        }
+
+    def fake_cloudflare_api_request(method, path, payload=None, query=None):
+        calls.append({"method": method, "path": path, "payload": payload, "query": query})
+        if method == "GET" and query:
+            return {"success": True, "result": []}
+        if method == "GET" and path.endswith("/stale-id"):
+            raise main.HTTPException(status_code=502, detail="The custom hostname was not found.")
+        if method == "POST":
+            post_count = len([call for call in calls if call["method"] == "POST"])
+            return result("stale-id" if post_count == 1 else "fresh-id")
+        return result("fresh-id")
+
+    monkeypatch.setattr(main, "_cloudflare_api_request", fake_cloudflare_api_request)
+
+    partner_signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Stale Hostname",
+            "email": f"stale-hostname-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Stale Hostname Clinic",
+        },
+    )
+    assert partner_signup.status_code == 200
+    partner_token = partner_signup.json()["token"]
+
+    settings = client.patch(
+        "/partners/settings",
+        headers={"Authorization": f"Bearer {partner_token}"},
+        json={"clinic_domain": clinic_domain},
+    )
+    assert settings.status_code == 200
+
+    created = client.post(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+    assert created.status_code == 200
+    assert created.json()["cloudflare"]["id"] == "stale-id"
+
+    recreated = client.post(
+        "/partners/domain/cloudflare-custom-hostname",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+
+    assert recreated.status_code == 200
+    assert recreated.json()["cloudflare"]["id"] == "fresh-id"
+    assert [call["method"] for call in calls] == ["GET", "POST", "GET", "GET", "POST"]
+
+
 def test_partner_cloudflare_validation_errors_are_visible(monkeypatch, tmp_path) -> None:
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]

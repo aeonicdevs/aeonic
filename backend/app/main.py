@@ -382,6 +382,11 @@ def _get_cloudflare_custom_hostname(custom_hostname_id: str) -> dict[str, Any]:
     )
 
 
+def _is_cloudflare_not_found_error(error: HTTPException) -> bool:
+    detail = str(error.detail).lower()
+    return "not found" in detail or "could not be found" in detail
+
+
 def _create_cloudflare_custom_hostname(domain: str) -> dict[str, Any]:
     existing = _find_cloudflare_custom_hostname(domain)
     if existing is not None:
@@ -509,6 +514,22 @@ def _persist_cloudflare_error(db: sqlite3.Connection, domain: str, error: str) -
         """
         UPDATE partner_domains
         SET cloudflare_error = ?,
+            cloudflare_synced_at = ?
+        WHERE domain = ?
+        """,
+        (error, datetime.now(UTC).isoformat(), domain),
+    )
+
+
+def _clear_cloudflare_custom_hostname(db: sqlite3.Connection, domain: str, error: str | None = None) -> None:
+    db.execute(
+        """
+        UPDATE partner_domains
+        SET cloudflare_custom_hostname_id = NULL,
+            cloudflare_hostname_status = NULL,
+            cloudflare_ssl_status = NULL,
+            cloudflare_ssl_validation_method = NULL,
+            cloudflare_error = ?,
             cloudflare_synced_at = ?
         WHERE domain = ?
         """,
@@ -987,7 +1008,14 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                     _persist_cloudflare_result(db, domain, result)
                     partner_domain = _get_partner_domain(db, domain)
                 except HTTPException as error:
-                    _persist_cloudflare_error(db, domain, str(error.detail))
+                    if _is_cloudflare_not_found_error(error):
+                        existing = _find_cloudflare_custom_hostname(domain)
+                        if existing is not None:
+                            _persist_cloudflare_result(db, domain, existing)
+                        else:
+                            _clear_cloudflare_custom_hostname(db, domain, str(error.detail))
+                    else:
+                        _persist_cloudflare_error(db, domain, str(error.detail))
                     partner_domain = _get_partner_domain(db, domain)
             return {"cloudflare": _public_stored_cloudflare_custom_hostname(partner_domain, domain)}
 
@@ -1030,7 +1058,13 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             partner_domain = _get_partner_domain(db, domain)
             try:
                 if partner_domain is not None and partner_domain["cloudflare_custom_hostname_id"]:
-                    result = _get_cloudflare_custom_hostname(partner_domain["cloudflare_custom_hostname_id"])
+                    try:
+                        result = _get_cloudflare_custom_hostname(partner_domain["cloudflare_custom_hostname_id"])
+                    except HTTPException as error:
+                        if not _is_cloudflare_not_found_error(error):
+                            raise
+                        _clear_cloudflare_custom_hostname(db, domain, str(error.detail))
+                        result = _create_cloudflare_custom_hostname(domain)
                 else:
                     result = _create_cloudflare_custom_hostname(domain)
                 _persist_cloudflare_result(db, domain, result)
