@@ -97,6 +97,14 @@ jobs:
           ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
           set -euo pipefail
           cd "$REMOTE_PATH"
+          mkdir -p .deploy-data
+          if docker container inspect aeonic-backend >/dev/null 2>&1; then
+            docker cp aeonic-backend:/app/.data/aeonic.sqlite3 .deploy-data/aeonic.sqlite3 2>/dev/null || true
+          fi
           docker compose up -d --build backend caddy
+          if [ -f .deploy-data/aeonic.sqlite3 ]; then
+            docker cp .deploy-data/aeonic.sqlite3 aeonic-backend:/app/.data/aeonic.sqlite3
+            docker compose restart backend
+          fi
           docker image prune -f
           EOF
