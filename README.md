@@ -161,12 +161,13 @@ For scalable tenant custom domains:
 - If Cloudflare connects to the origin over HTTPS while preserving tenant Host headers, set the Cloudflare custom hostname origin SNI to `nexus.aeonichealthsystems.com` so Caddy can present the Aeonic-owned origin certificate.
 - Tenant domains still need to be saved in the Partner app. The API allows CORS from saved HTTPS patient domains dynamically.
 
-Caddy expects the Cloudflare Origin CA certificate for Nexus at:
+Caddy expects the Cloudflare Origin CA certificate for Nexus on the droplet at:
 
 ```text
-secrets/caddy/cloudflare-origin.pem
-secrets/caddy/cloudflare-origin.key
+/home/deploy/.aeonic-secrets/caddy/cloudflare-origin.pem
+/home/deploy/.aeonic-secrets/caddy/cloudflare-origin.key
 ```
 
-Keep these files only on the droplet. The deploy workflow excludes `secrets/` so
-these private files are preserved and never synced from git.
+The deploy workflow writes these files from the `CLOUDFLARE_ORIGIN_CERT` and
+`CLOUDFLARE_ORIGIN_KEY` GitHub environment secrets. Set `CADDY_CERTS_PATH` in
+the droplet `.env` only if the deploy user or secret directory changes.

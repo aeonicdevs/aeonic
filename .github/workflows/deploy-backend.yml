@@ -113,19 +113,18 @@ jobs:
 
           ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
           set -euo pipefail
-          cd "$REMOTE_PATH"
-          mkdir -p secrets/caddy
-          chmod 700 secrets secrets/caddy
+          mkdir -p "\$HOME/.aeonic-secrets/caddy"
+          chmod 700 "\$HOME/.aeonic-secrets" "\$HOME/.aeonic-secrets/caddy"
           EOF
 
-          scp -i "$SSH_KEY_PATH" -P "$SSH_PORT" "$CERT_PATH" "$SSH_TARGET:$REMOTE_PATH/secrets/caddy/cloudflare-origin.pem"
-          scp -i "$SSH_KEY_PATH" -P "$SSH_PORT" "$KEY_PATH" "$SSH_TARGET:$REMOTE_PATH/secrets/caddy/cloudflare-origin.key"
+          scp -i "$SSH_KEY_PATH" -P "$SSH_PORT" "$CERT_PATH" "$SSH_TARGET:.aeonic-secrets/caddy/cloudflare-origin.pem"
+          scp -i "$SSH_KEY_PATH" -P "$SSH_PORT" "$KEY_PATH" "$SSH_TARGET:.aeonic-secrets/caddy/cloudflare-origin.key"
 
           ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
           set -euo pipefail
           cd "$REMOTE_PATH"
-          chmod 644 secrets/caddy/cloudflare-origin.pem
-          chmod 600 secrets/caddy/cloudflare-origin.key
+          chmod 644 "\$HOME/.aeonic-secrets/caddy/cloudflare-origin.pem"
+          chmod 600 "\$HOME/.aeonic-secrets/caddy/cloudflare-origin.key"
           mkdir -p .deploy-data
           if docker container inspect aeonic-backend >/dev/null 2>&1; then
             docker cp aeonic-backend:/app/.data/aeonic.sqlite3 .deploy-data/aeonic.sqlite3 2>/dev/null || true
