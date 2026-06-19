@@ -32,6 +32,20 @@ to another developer's laptop when multiple tunnel connectors are running.
 npm run build
 ```
 
+## Production
+
+Nexus is served by the production Docker/Caddy stack for Cloudflare For SaaS
+tenant domains. The image builds the static Vite app and serves it with Nginx,
+while Caddy routes `nexus.aeonichealthsystems.com` and arbitrary non-API
+hostnames to that container.
+
+```sh
+docker compose up -d --build nexus caddy
+```
+
+Set `NEXUS_API_BASE_URL` in the root `.env` if the production API URL is not
+`https://api.aeonichealthsystems.com`.
+
 ## Reference Notes
 
 See `docs/reference-assessment.md` for notes on which parts of the provided HTML

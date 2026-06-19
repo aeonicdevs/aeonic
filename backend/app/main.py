@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import secrets
 import socket
 import sqlite3
@@ -12,8 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 
@@ -777,6 +777,44 @@ def _allowed_origin_regex() -> str | None:
     return r"^http://(localhost|127\.0\.0\.1):[0-9]+$"
 
 
+def _is_allowed_cors_origin(origin: str, database_path: str | Path) -> bool:
+    if origin in _allowed_origins():
+        return True
+
+    allowed_regex = _allowed_origin_regex()
+    if allowed_regex and re.fullmatch(allowed_regex, origin):
+        return True
+
+    parsed = urllib.parse.urlparse(origin)
+    if parsed.scheme != "https" or not parsed.netloc:
+        return False
+
+    domain = _normalize_host(parsed.netloc)
+    with _connect(database_path) as db:
+        return _get_partner_domain(db, domain) is not None
+
+
+def _add_cors_headers(response: Response, origin: str, request: Request) -> None:
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = request.headers.get(
+        "access-control-request-method",
+        "GET,POST,PATCH,OPTIONS",
+    )
+    response.headers["Access-Control-Allow-Headers"] = request.headers.get(
+        "access-control-request-headers",
+        "Authorization,Content-Type",
+    )
+
+    vary = response.headers.get("Vary")
+    if vary:
+        vary_values = {value.strip() for value in vary.split(",")}
+        if "Origin" not in vary_values:
+            response.headers["Vary"] = f"{vary}, Origin"
+    else:
+        response.headers["Vary"] = "Origin"
+
+
 def create_app(database_path: str | Path | None = None) -> FastAPI:
     resolved_database_path = database_path or _default_database_path()
     _initialize_database(resolved_database_path)
@@ -784,14 +822,21 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
     app = FastAPI(title="Aeonic API", version="0.1.0")
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_allowed_origins(),
-        allow_origin_regex=_allowed_origin_regex(),
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    @app.middleware("http")
+    async def cors_for_static_and_partner_origins(request: Request, call_next):
+        origin = request.headers.get("origin")
+        is_preflight = request.method == "OPTIONS" and "access-control-request-method" in request.headers
+        allowed_origin = bool(origin and _is_allowed_cors_origin(origin, resolved_database_path))
+
+        if is_preflight:
+            response = Response(status_code=200 if allowed_origin else 400)
+        else:
+            response = await call_next(request)
+
+        if origin and allowed_origin:
+            _add_cors_headers(response, origin, request)
+
+        return response
 
     @app.get("/health", tags=["system"])
     def health() -> dict[str, str]:

@@ -52,6 +52,17 @@ def test_partner_configures_domain_and_patient_authenticates() -> None:
     assert context.status_code == 200
     assert context.json()["partner"]["clinicName"] == "Avery Dental"
 
+    preflight = client.options(
+        "/nexus/context",
+        headers={
+            "Origin": f"https://{clinic_domain}",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == f"https://{clinic_domain}"
+
     patient_signup = client.post(
         "/patients/signup",
         json={

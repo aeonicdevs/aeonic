@@ -27,11 +27,28 @@ services:
       retries: 3
       start_period: 10s
 
+  nexus:
+    build:
+      context: ./apps/nexus
+      args:
+        VITE_API_BASE_URL: ${NEXUS_API_BASE_URL:-https://api.aeonichealthsystems.com}
+    container_name: aeonic-nexus
+    expose:
+      - "80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   caddy:
     image: caddy:2-alpine
     container_name: aeonic-caddy
     depends_on:
       - backend
+      - nexus
     ports:
       - "80:80"
       - "443:443"

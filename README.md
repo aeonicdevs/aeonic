@@ -42,6 +42,11 @@ Configure the Nexus Netlify site separately:
 - Build command: `npm run build`
 - Publish directory: `dist`
 
+That Netlify setup is only suitable for Aeonic-owned hostnames explicitly added
+to the Netlify site. Tenant custom hostnames managed through Cloudflare For SaaS
+should route to the production Docker/Caddy stack instead, because that origin
+accepts arbitrary tenant Host headers.
+
 Run the same static build locally:
 
 ```sh
@@ -134,7 +139,7 @@ This opens one tmux session with separate windows for the marketing site, Cloudf
 
 ## Deployment
 
-Pushing to `main` runs `.github/workflows/deploy-backend.yml`, which tests the FastAPI app and deploys it to a DigitalOcean Droplet over SSH.
+Pushing to `main` runs `.github/workflows/deploy-backend.yml`, which tests the FastAPI app and deploys the backend, Nexus, and Caddy stack to a DigitalOcean Droplet over SSH.
 
 Add these GitHub repository secrets:
 
@@ -147,3 +152,11 @@ Add these GitHub repository secrets:
 The Droplet needs Docker and the Docker Compose plugin installed.
 
 If you need production environment variables, create a `.env` file at the remote deploy path, for example `/home/deploy/aeonic/.env`. The deploy workflow preserves that file.
+
+For scalable tenant custom domains:
+
+- Keep `NEXUS_DNS_TARGET=nexus.aeonichealthsystems.com`.
+- Point Cloudflare For SaaS fallback/custom-hostname traffic at the Droplet/Caddy Nexus origin, not Netlify.
+- Use `NEXUS_API_BASE_URL=https://api.aeonichealthsystems.com` unless the API host changes.
+- If Cloudflare connects to the origin over HTTPS while preserving tenant Host headers, set the Cloudflare custom hostname origin SNI to `nexus.aeonichealthsystems.com` so Caddy can present the Aeonic-owned origin certificate.
+- Tenant domains still need to be saved in the Partner app. The API allows CORS from saved HTTPS patient domains dynamically.

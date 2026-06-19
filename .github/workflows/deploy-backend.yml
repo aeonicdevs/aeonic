@@ -1,4 +1,4 @@
-name: Deploy Backend
+name: Deploy App
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
         run: pytest
 
   deploy:
-    name: Deploy backend
+    name: Deploy app
     needs: test
     runs-on: ubuntu-latest
     environment: prod
@@ -82,7 +82,8 @@ jobs:
             --exclude '.env' \
             --exclude 'backend/.env' \
             --exclude 'backend/.venv' \
-            --exclude 'frontend/node_modules' \
+            --exclude 'apps/*/dist' \
+            --exclude 'apps/*/node_modules' \
             -e "ssh -i $SSH_KEY_PATH -p $SSH_PORT" \
             ./ "$SSH_TARGET:$REMOTE_PATH/"
 
@@ -91,7 +92,7 @@ jobs:
           SSH_TARGET=$SSH_TARGET
           EOF
 
-      - name: Restart backend
+      - name: Restart app
         run: |
           set -euo pipefail
           ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
@@ -101,7 +102,7 @@ jobs:
           if docker container inspect aeonic-backend >/dev/null 2>&1; then
             docker cp aeonic-backend:/app/.data/aeonic.sqlite3 .deploy-data/aeonic.sqlite3 2>/dev/null || true
           fi
-          docker compose up -d --build backend caddy
+          docker compose up -d --build backend nexus caddy
           if [ -f .deploy-data/aeonic.sqlite3 ]; then
             docker cp .deploy-data/aeonic.sqlite3 aeonic-backend:/app/.data/aeonic.sqlite3
             docker compose restart backend

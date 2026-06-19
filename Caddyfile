@@ -2,7 +2,24 @@
   auto_https disable_redirects
 }
 
-api.aeonichealthsystems.com {
+(api_proxy) {
   encode gzip
   reverse_proxy backend:8000
+}
+
+api.aeonichealthsystems.com {
+  import api_proxy
+}
+
+http://api.aeonichealthsystems.com {
+  import api_proxy
+}
+
+(nexus_proxy) {
+  encode gzip
+  reverse_proxy nexus:80
+}
+
+nexus.aeonichealthsystems.com, :80, :443 {
+  import nexus_proxy
 }
