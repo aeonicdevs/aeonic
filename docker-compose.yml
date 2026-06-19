@@ -6,6 +6,13 @@ services:
     environment:
       APP_ENV: production
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://partner.aeonichealthsystems.com,https://nexus.aeonichealthsystems.com,https://www.aeonichealthsystems.com,https://aeonichealthsystems.com}
+      NEXUS_DNS_TARGET: ${NEXUS_DNS_TARGET:-nexus.aeonichealthsystems.com}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
+      CLOUDFLARE_CUSTOM_HOSTNAME_SSL_METHOD: ${CLOUDFLARE_CUSTOM_HOSTNAME_SSL_METHOD:-http}
+      CLOUDFLARE_CUSTOM_HOSTNAME_CA: ${CLOUDFLARE_CUSTOM_HOSTNAME_CA:-}
+      CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN: ${CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN:-}
+      CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI: ${CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI:-}
     expose:
       - "8000"
     ports:
