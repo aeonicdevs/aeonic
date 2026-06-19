@@ -37,6 +37,12 @@ type DomainSetup = {
   recordValue: string;
 };
 
+type CloudflareValidationRecord = {
+  status: string | null;
+  txt_name?: string;
+  txt_value?: string;
+};
+
 type CloudflareCustomHostname = {
   domain: string | null;
   status: CloudflareProvisioningStatus;
@@ -47,6 +53,7 @@ type CloudflareCustomHostname = {
   sslStatus: string | null;
   sslValidationMethod: string | null;
   syncedAt: string | null;
+  validationRecords?: CloudflareValidationRecord[];
   diagnostics: string[];
   error: string | null;
 };
@@ -202,6 +209,16 @@ const cloudflareDiagnostics = computed(() => {
     return [errorMessage, ...diagnostics];
   }
   return diagnostics;
+});
+
+const cloudflareTxtValidationRecords = computed(() => {
+  return (cloudflareHostname.value?.validationRecords ?? [])
+    .filter((record) => record.txt_name && record.txt_value)
+    .map((record) => ({
+      status: record.status ?? 'pending',
+      name: record.txt_name ?? '',
+      value: record.txt_value ?? '',
+    }));
 });
 
 const shouldPollCloudflare = computed(() => {
@@ -734,6 +751,59 @@ onUnmounted(() => {
                   <ul class="cloudflare-diagnostics">
                     <li v-for="diagnostic in cloudflareDiagnostics" :key="diagnostic">{{ diagnostic }}</li>
                   </ul>
+                </v-alert>
+
+                <v-alert
+                  v-if="cloudflareTxtValidationRecords.length"
+                  class="mt-4"
+                  color="info"
+                  icon="mdi-text-box-check-outline"
+                  variant="tonal"
+                >
+                  <div class="font-weight-bold mb-2">SSL validation DNS records</div>
+                  <div class="text-body-2 mb-3">
+                    Create these TXT records with the DNS provider for {{ cloudflareHostname?.domain || partner.clinicDomain }}.
+                    Cloudflare will finish SSL validation after they are visible.
+                  </div>
+
+                  <div class="validation-record-list">
+                    <div
+                      v-for="record in cloudflareTxtValidationRecords"
+                      :key="`${record.name}-${record.value}`"
+                      class="validation-record"
+                    >
+                      <div class="validation-record-type">
+                        <span class="label">Type</span>
+                        <strong>TXT</strong>
+                      </div>
+                      <div class="validation-record-field">
+                        <span class="label">Name</span>
+                        <div class="dns-record-value">
+                          <strong>{{ record.name }}</strong>
+                          <v-btn
+                            icon="mdi-content-copy"
+                            size="small"
+                            title="Copy validation record name"
+                            variant="text"
+                            @click="copyDnsValue(record.name)"
+                          />
+                        </div>
+                      </div>
+                      <div class="validation-record-field">
+                        <span class="label">Value</span>
+                        <div class="dns-record-value">
+                          <strong>{{ record.value }}</strong>
+                          <v-btn
+                            icon="mdi-content-copy"
+                            size="small"
+                            title="Copy validation record value"
+                            variant="text"
+                            @click="copyDnsValue(record.value)"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </v-alert>
 
                 <div class="d-flex flex-column flex-md-row align-md-center ga-3 mt-4">

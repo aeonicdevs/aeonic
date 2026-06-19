@@ -147,13 +147,34 @@ body {
   padding-left: 18px;
 }
 
+.validation-record-list {
+  display: grid;
+  gap: 10px;
+}
+
+.validation-record {
+  display: grid;
+  grid-template-columns: 0.5fr 1.2fr 1.6fr;
+  gap: 10px;
+}
+
+.validation-record-type,
+.validation-record-field {
+  min-width: 0;
+  border: 1px solid rgba(36, 73, 65, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 12px;
+}
+
 @media (max-width: 800px) {
   .setup-step {
     grid-template-columns: 1fr;
   }
 
   .dns-record-grid,
-  .cloudflare-grid {
+  .cloudflare-grid,
+  .validation-record {
     grid-template-columns: 1fr;
   }
 }
