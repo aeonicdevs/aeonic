@@ -94,11 +94,38 @@ jobs:
           EOF
 
       - name: Restart app
+        env:
+          CLOUDFLARE_ORIGIN_CERT: ${{ secrets.CLOUDFLARE_ORIGIN_CERT }}
+          CLOUDFLARE_ORIGIN_KEY: ${{ secrets.CLOUDFLARE_ORIGIN_KEY }}
         run: |
           set -euo pipefail
+          CERT_PATH="$(mktemp)"
+          KEY_PATH="$(mktemp)"
+          cleanup() {
+            rm -f "$CERT_PATH" "$KEY_PATH"
+          }
+          trap cleanup EXIT
+
+          : "${CLOUDFLARE_ORIGIN_CERT:?Missing CLOUDFLARE_ORIGIN_CERT secret}"
+          : "${CLOUDFLARE_ORIGIN_KEY:?Missing CLOUDFLARE_ORIGIN_KEY secret}"
+          printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$CERT_PATH"
+          printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$KEY_PATH"
+
           ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
           set -euo pipefail
           cd "$REMOTE_PATH"
+          mkdir -p secrets/caddy
+          chmod 700 secrets secrets/caddy
+          EOF
+
+          scp -i "$SSH_KEY_PATH" -P "$SSH_PORT" "$CERT_PATH" "$SSH_TARGET:$REMOTE_PATH/secrets/caddy/cloudflare-origin.pem"
+          scp -i "$SSH_KEY_PATH" -P "$SSH_PORT" "$KEY_PATH" "$SSH_TARGET:$REMOTE_PATH/secrets/caddy/cloudflare-origin.key"
+
+          ssh -i "$SSH_KEY_PATH" -p "$SSH_PORT" "$SSH_TARGET" <<EOF
+          set -euo pipefail
+          cd "$REMOTE_PATH"
+          chmod 644 secrets/caddy/cloudflare-origin.pem
+          chmod 600 secrets/caddy/cloudflare-origin.key
           mkdir -p .deploy-data
           if docker container inspect aeonic-backend >/dev/null 2>&1; then
             docker cp aeonic-backend:/app/.data/aeonic.sqlite3 .deploy-data/aeonic.sqlite3 2>/dev/null || true
