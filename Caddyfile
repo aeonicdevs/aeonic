@@ -25,6 +25,11 @@ nexus.aeonichealthsystems.com {
   import nexus_proxy
 }
 
+:443 {
+  tls /etc/caddy/certs/cloudflare-origin.pem /etc/caddy/certs/cloudflare-origin.key
+  import nexus_proxy
+}
+
 http://nexus.aeonichealthsystems.com, :80 {
   import nexus_proxy
 }

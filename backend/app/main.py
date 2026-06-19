@@ -318,12 +318,13 @@ def _cloudflare_zone_path(path: str = "") -> str:
 
 
 def _cloudflare_custom_hostname_origin_payload() -> dict[str, str]:
-    origin = _normalize_host(os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", _nexus_dns_target()))
-    origin_sni = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI", origin).strip()
-    return {
-        "custom_origin_server": origin,
-        "custom_origin_sni": origin_sni,
+    payload = {
+        "custom_origin_server": _normalize_host(os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", _nexus_dns_target())),
     }
+    origin_sni = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI")
+    if origin_sni:
+        payload["custom_origin_sni"] = origin_sni.strip()
+    return payload
 
 
 def _cloudflare_custom_hostname_payload(domain: str) -> dict[str, Any]:

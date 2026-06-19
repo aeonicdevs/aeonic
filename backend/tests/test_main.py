@@ -322,7 +322,7 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
     assert calls[1]["payload"]["ssl"]["method"] == "http"
     assert calls[1]["payload"]["ssl"]["type"] == "dv"
     assert calls[1]["payload"]["custom_origin_server"] == "nexus.aeonichealthsystems.com"
-    assert calls[1]["payload"]["custom_origin_sni"] == "nexus.aeonichealthsystems.com"
+    assert "custom_origin_sni" not in calls[1]["payload"]
 
     stored = client.get(
         "/partners/domain/cloudflare-custom-hostname",
@@ -349,7 +349,6 @@ def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) ->
     assert calls[-1]["payload"] == {
         "ssl": {"method": "http", "type": "dv"},
         "custom_origin_server": "nexus.aeonichealthsystems.com",
-        "custom_origin_sni": "nexus.aeonichealthsystems.com",
     }
 
 
