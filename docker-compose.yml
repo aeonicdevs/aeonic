@@ -55,6 +55,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./secrets/caddy:/etc/caddy/certs:ro
       - caddy_data:/data
       - caddy_config:/config
 

@@ -15,6 +15,7 @@ backend/.data/
 .env
 .env.*
 !.env.example
+secrets/
 scripts/dev-local.env
 
 # Frontend

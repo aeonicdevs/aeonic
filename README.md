@@ -160,3 +160,13 @@ For scalable tenant custom domains:
 - Use `NEXUS_API_BASE_URL=https://api.aeonichealthsystems.com` unless the API host changes.
 - If Cloudflare connects to the origin over HTTPS while preserving tenant Host headers, set the Cloudflare custom hostname origin SNI to `nexus.aeonichealthsystems.com` so Caddy can present the Aeonic-owned origin certificate.
 - Tenant domains still need to be saved in the Partner app. The API allows CORS from saved HTTPS patient domains dynamically.
+
+Caddy expects the Cloudflare Origin CA certificate for Nexus at:
+
+```text
+secrets/caddy/cloudflare-origin.pem
+secrets/caddy/cloudflare-origin.key
+```
+
+Keep these files only on the droplet. The deploy workflow excludes `secrets/` so
+these private files are preserved and never synced from git.
