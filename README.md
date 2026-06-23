@@ -5,6 +5,7 @@ This repo is split into:
 - `backend/` - FastAPI application
 - `apps/marketing/` - public marketing site
 - `apps/partner/` - partner app for clinic-owner signup, login, dashboard, and domain configuration
+- `apps/admin/` - internal admin app for operations testing and manual Arora workflow simulation
 - `apps/nexus/` - patient-facing Aeonic Nexus app that resolves the partner from the request host
 
 Shared frontend packages can be added under `packages/` when there is enough
@@ -42,6 +43,14 @@ Configure the Nexus Netlify site separately:
 - Build command: `npm run build`
 - Publish directory: `dist`
 
+Configure the Admin Netlify site separately:
+
+- Base directory: `apps/admin`
+- Build command: `npm run build`
+- Publish directory: `dist`
+- Environment variable: `VITE_API_BASE_URL=https://api.aeonichealthsystems.com`
+- Domain: `admin.aeonichealthsystems.com`
+
 That Netlify setup is only suitable for Aeonic-owned hostnames explicitly added
 to the Netlify site. Tenant custom hostnames managed through Cloudflare For SaaS
 should route to the production Docker/Caddy stack instead, because that origin
@@ -56,7 +65,7 @@ npm run generate:netlify
 
 ## Partner And Nexus Skeleton
 
-Run the API, Partner app, and Nexus app in separate terminals:
+Run the API, Admin app, Partner app, and Nexus app in separate terminals:
 
 ```sh
 cd backend
@@ -69,6 +78,11 @@ npm run dev
 ```
 
 ```sh
+cd apps/admin
+npm run dev
+```
+
+```sh
 cd apps/nexus
 npm run dev
 ```
@@ -77,6 +91,7 @@ Local URLs:
 
 - Marketing site: `http://127.0.0.1:3000`
 - Partner app: `http://127.0.0.1:5174`
+- Admin app: `http://127.0.0.1:5175`
 - Nexus patient app: `http://127.0.0.1:5173`
 
 For local host simulation, save the real or simulated patient domain in the Partner app, then open Nexus with:
@@ -117,6 +132,7 @@ This creates or updates the `~/.cloudflared/<AEONIC_TUNNEL_NAME>.yml` ingress ru
 - `api-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:8000`
 - `nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:5173`
 - `partner-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:5174`
+- `admin-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:5175`
 - `www-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` -> `http://127.0.0.1:3000`
 
 Use per-developer hostnames instead of one shared `nexus-local.<domain>` because multiple laptops running the same shared tunnel can cause Cloudflare to route requests to the wrong developer's local frontend, backend, or database. Per-developer hostnames keep each developer's browser, API calls, logs, and local data isolated.
@@ -126,6 +142,7 @@ The tmux startup script sets:
 - `VITE_API_BASE_URL=https://api-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Nexus
 - `VITE_ALLOWED_HOSTS=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Nexus Vite
 - `VITE_ALLOWED_HOSTS=partner-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Partner Vite
+- `VITE_ALLOWED_HOSTS=admin-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for Admin Vite
 - `NEXUS_DNS_TARGET=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>` for the backend CNAME instructions
 - `AEONIC_DEV_DOMAIN_ALIASES=nexus-<AEONIC_DEV_SUBDOMAIN>-local.<AEONIC_TEST_DOMAIN>=<AEONIC_PATIENT_DOMAIN_ALIAS_TARGET>` for the backend
 

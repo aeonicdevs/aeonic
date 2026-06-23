@@ -25,7 +25,9 @@ CONFIG_FILE="${CLOUDFLARED_CONFIG:-$CLOUDFLARED_DIR/$TUNNEL_NAME.yml}"
 API_HOSTNAME="${AEONIC_API_TUNNEL_HOSTNAME:-api-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 NEXUS_HOSTNAME="${AEONIC_NEXUS_TUNNEL_HOSTNAME:-nexus-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 PARTNER_HOSTNAME="${AEONIC_PARTNER_TUNNEL_HOSTNAME:-partner-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
+ADMIN_HOSTNAME="${AEONIC_ADMIN_TUNNEL_HOSTNAME:-admin-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 WWW_HOSTNAME="${AEONIC_WWW_TUNNEL_HOSTNAME:-www-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
+PATIENT_DOMAIN_ALIAS_TARGET="${AEONIC_PATIENT_DOMAIN_ALIAS_TARGET:-}"
 
 required_commands=(cloudflared)
 for command_name in "${required_commands[@]}"; do
@@ -74,8 +76,22 @@ ingress:
   - hostname: $NEXUS_HOSTNAME
     service: http://127.0.0.1:5173
 
+YAML
+
+if [[ -n "$PATIENT_DOMAIN_ALIAS_TARGET" ]]; then
+  cat >> "$CONFIG_FILE" <<YAML
+  - hostname: $PATIENT_DOMAIN_ALIAS_TARGET
+    service: http://127.0.0.1:5173
+
+YAML
+fi
+
+cat >> "$CONFIG_FILE" <<YAML
   - hostname: $PARTNER_HOSTNAME
     service: http://127.0.0.1:5174
+
+  - hostname: $ADMIN_HOSTNAME
+    service: http://127.0.0.1:5175
 
   - hostname: $WWW_HOSTNAME
     service: http://127.0.0.1:3000
@@ -103,6 +119,7 @@ route_dns() {
 route_dns "$API_HOSTNAME"
 route_dns "$NEXUS_HOSTNAME"
 route_dns "$PARTNER_HOSTNAME"
+route_dns "$ADMIN_HOSTNAME"
 route_dns "$WWW_HOSTNAME"
 
 cloudflared --config "$CONFIG_FILE" tunnel ingress validate
@@ -118,7 +135,9 @@ Routes:
   https://$API_HOSTNAME
   https://$NEXUS_HOSTNAME
   https://$PARTNER_HOSTNAME
+  https://$ADMIN_HOSTNAME
   https://$WWW_HOSTNAME
+  ${PATIENT_DOMAIN_ALIAS_TARGET:+https://$PATIENT_DOMAIN_ALIAS_TARGET}
 
 Daily startup:
   AEONIC_TEST_DOMAIN=$TEST_DOMAIN AEONIC_DEV_SUBDOMAIN=$DEV_SUBDOMAIN scripts/dev-tmux.sh

@@ -30,6 +30,7 @@ CONFIG_FILE="${CLOUDFLARED_CONFIG:-$CLOUDFLARED_DIR/$TUNNEL_NAME.yml}"
 API_HOSTNAME="${AEONIC_API_TUNNEL_HOSTNAME:-api-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 NEXUS_HOSTNAME="${AEONIC_NEXUS_TUNNEL_HOSTNAME:-nexus-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 PARTNER_HOSTNAME="${AEONIC_PARTNER_TUNNEL_HOSTNAME:-partner-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
+ADMIN_HOSTNAME="${AEONIC_ADMIN_TUNNEL_HOSTNAME:-admin-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 WWW_HOSTNAME="${AEONIC_WWW_TUNNEL_HOSTNAME:-www-$DEV_SUBDOMAIN-local.$TEST_DOMAIN}"
 PATIENT_DOMAIN_ALIAS_TARGET="${AEONIC_PATIENT_DOMAIN_ALIAS_TARGET:-app.nathansdentistry.com}"
 NEXUS_DNS_TARGET="${NEXUS_DNS_TARGET:-$NEXUS_HOSTNAME}"
@@ -68,8 +69,11 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   exec tmux attach-session -t "$SESSION_NAME"
 fi
 
-LOCAL_ORIGINS="http://127.0.0.1:3000,http://127.0.0.1:5174,http://127.0.0.1:5173,http://localhost:3000,http://localhost:5174,http://localhost:5173"
-TUNNEL_ORIGINS="https://$NEXUS_HOSTNAME,https://$PARTNER_HOSTNAME,https://$WWW_HOSTNAME"
+LOCAL_ORIGINS="http://127.0.0.1:3000,http://127.0.0.1:5175,http://127.0.0.1:5174,http://127.0.0.1:5173,http://localhost:3000,http://localhost:5175,http://localhost:5174,http://localhost:5173"
+TUNNEL_ORIGINS="https://$NEXUS_HOSTNAME,https://$PARTNER_HOSTNAME,https://$ADMIN_HOSTNAME,https://$WWW_HOSTNAME"
+if [[ -n "$PATIENT_DOMAIN_ALIAS_TARGET" ]]; then
+  TUNNEL_ORIGINS="$TUNNEL_ORIGINS,https://$PATIENT_DOMAIN_ALIAS_TARGET"
+fi
 ALLOWED_ORIGINS="$LOCAL_ORIGINS,$TUNNEL_ORIGINS"
 
 # Appended to each tmux pane command: if the process exits/crashes, print its
@@ -98,8 +102,11 @@ tmux new-window -t "$SESSION_NAME" -n backend \
 tmux new-window -t "$SESSION_NAME" -n partner \
   "cd '$REPO_ROOT/apps/partner' && VITE_API_BASE_URL=http://127.0.0.1:8000 VITE_ALLOWED_HOSTS='$PARTNER_HOSTNAME' npm run dev$HOLD"
 
+tmux new-window -t "$SESSION_NAME" -n admin \
+  "cd '$REPO_ROOT/apps/admin' && VITE_API_BASE_URL='https://$API_HOSTNAME' VITE_ALLOWED_HOSTS='$ADMIN_HOSTNAME' npm run dev$HOLD"
+
 tmux new-window -t "$SESSION_NAME" -n nexus \
-  "cd '$REPO_ROOT/apps/nexus' && VITE_API_BASE_URL='https://$API_HOSTNAME' VITE_ALLOWED_HOSTS='$NEXUS_HOSTNAME' npm run dev -- --port 5173 --strictPort$HOLD"
+  "cd '$REPO_ROOT/apps/nexus' && VITE_API_BASE_URL='https://$API_HOSTNAME' VITE_ALLOWED_HOSTS='$NEXUS_HOSTNAME,$PATIENT_DOMAIN_ALIAS_TARGET' npm run dev -- --port 5173 --strictPort$HOLD"
 
 tmux select-window -t "$SESSION_NAME:www"
 if [[ "${AEONIC_TMUX_ATTACH:-1}" == "0" ]]; then
