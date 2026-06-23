@@ -142,7 +142,7 @@ def test_patient_medication_shipment_defaults_to_mock_order(monkeypatch, tmp_pat
     assert response.status_code == 200
     shipment = response.json()["medicationShipment"]
     assert shipment["dryRun"] is False
-    assert shipment["status"] == "mock_order_created"
+    assert shipment["status"] == "pending_review"
     assert shipment["patientId"] == patient_id
     assert shipment["aroraPatientId"] == f"mock_patient_{patient_id}"
     assert shipment["aroraOrderId"].startswith("mock_order_")
@@ -206,7 +206,7 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
     assert response.status_code == 200
     shipment = response.json()["medicationShipment"]
     assert shipment["dryRun"] is False
-    assert shipment["status"] == "order_created"
+    assert shipment["status"] == "pending_review"
     assert shipment["aroraPatientId"] == "arora_patient_123"
     assert shipment["aroraOrderId"] == "order456"
     assert calls == [
@@ -247,6 +247,56 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
             "query": None,
         },
     ]
+
+
+def test_admin_can_list_and_advance_patient_orders(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("ARORA_API_MODE", raising=False)
+    monkeypatch.delenv("ARORA_API_KEY", raising=False)
+    monkeypatch.delenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID", raising=False)
+    monkeypatch.delenv("ARORA_DRY_RUN", raising=False)
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    patient_token, patient_id = _create_patient_session(client, suffix)
+
+    created = client.post(
+        "/patients/medication-shipments",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={},
+    )
+    assert created.status_code == 200
+    shipment_id = created.json()["medicationShipment"]["id"]
+
+    admin_list = client.get("/admin/medication-shipments")
+    assert admin_list.status_code == 200
+    admin_body = admin_list.json()
+    assert admin_body["stages"][0]["value"] == "pending_review"
+    assert len(admin_body["medicationShipments"]) == 1
+    admin_shipment = admin_body["medicationShipments"][0]
+    assert admin_shipment["id"] == shipment_id
+    assert admin_shipment["patientId"] == patient_id
+    assert admin_shipment["patientName"] == "Mira Chen"
+    assert admin_shipment["partnerName"] == "Care Clinic"
+    assert admin_shipment["status"] == "pending_review"
+
+    updated = client.patch(
+        f"/admin/medication-shipments/{shipment_id}",
+        json={"status": "pharmacy_submitted"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["medicationShipment"]["status"] == "pharmacy_submitted"
+
+    patient_list = client.get(
+        "/patients/medication-shipments",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert patient_list.status_code == 200
+    assert patient_list.json()["medicationShipments"][0]["status"] == "pharmacy_submitted"
+
+    invalid = client.patch(
+        f"/admin/medication-shipments/{shipment_id}",
+        json={"status": "not_an_arora_stage"},
+    )
+    assert invalid.status_code == 422
 
 
 def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:

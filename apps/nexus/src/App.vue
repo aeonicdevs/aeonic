@@ -26,6 +26,7 @@ type MedicationShipment = {
   status: string;
   dryRun: boolean;
   response: { message?: string; expectedOutcome?: string } | null;
+  updatedAt: string;
   createdAt: string;
 };
 
@@ -41,6 +42,7 @@ const partner = ref<Partner | null>(null);
 const patient = ref<Patient | null>(null);
 const token = ref(localStorage.getItem(tokenKey) ?? '');
 const medicationShipment = ref<MedicationShipment | null>(null);
+const medicationShipments = ref<MedicationShipment[]>([]);
 
 const signup = reactive({
   name: '',
@@ -58,9 +60,40 @@ const activeProtocol = computed(() => (patient.value ? 'New patient onboarding' 
 const clinicDomainLabel = computed(() => partner.value?.clinicDomain ?? resolvedHost);
 const shipmentModeLabel = computed(() => {
   if (!medicationShipment.value) return 'Not started';
-  if (medicationShipment.value.status.startsWith('mock_')) return 'Mock order';
+  if (medicationShipment.value.aroraOrderId?.startsWith('mock_order_')) return 'Mock order';
   return medicationShipment.value.dryRun ? 'Dry run' : 'Live order';
 });
+const latestMedicationShipment = computed(() => medicationShipment.value ?? medicationShipments.value[0] ?? null);
+
+function formatApiDetail(detail: unknown): string {
+  if (typeof detail === 'string') return detail;
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          const record = item as { loc?: unknown; msg?: unknown };
+          const field = Array.isArray(record.loc) ? record.loc.filter(Boolean).slice(1).join('.') : '';
+          const message = typeof record.msg === 'string' ? record.msg : '';
+          if (field && message) return `${field}: ${message}`;
+          if (message) return message;
+        }
+        return '';
+      })
+      .filter(Boolean);
+    if (messages.length) return messages.join('; ');
+  }
+
+  if (detail && typeof detail === 'object') {
+    const record = detail as { message?: unknown; msg?: unknown; error?: unknown };
+    for (const value of [record.message, record.msg, record.error]) {
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+  }
+
+  return 'Something went wrong';
+}
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -74,7 +107,7 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body.detail ?? 'Something went wrong');
+    throw new Error(formatApiDetail(body.detail));
   }
 
   return body as T;
@@ -90,6 +123,10 @@ function setSession(nextToken: string, nextPatient: Patient, nextPartner: Partne
 function resetShipmentFeedback() {
   shipmentMessage.value = '';
   medicationShipment.value = null;
+}
+
+function formatShipmentStatus(status: string) {
+  return status.replace(/_/g, ' ');
 }
 
 async function loadContext() {
@@ -114,9 +151,22 @@ async function restoreSession() {
     const body = await api<{ patient: Patient; partner: Partner }>('/patients/me');
     patient.value = body.patient;
     partner.value = body.partner;
+    await loadMedicationShipments();
   } catch {
     localStorage.removeItem(tokenKey);
     token.value = '';
+  }
+}
+
+async function loadMedicationShipments() {
+  if (!token.value) return;
+
+  try {
+    const body = await api<{ medicationShipments: MedicationShipment[] }>('/patients/medication-shipments');
+    medicationShipments.value = body.medicationShipments;
+    medicationShipment.value = body.medicationShipments[0] ?? null;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to load medication shipments';
   }
 }
 
@@ -171,7 +221,8 @@ async function requestMedicationShipment() {
       body: JSON.stringify({}),
     });
     medicationShipment.value = body.medicationShipment;
-    if (body.medicationShipment.status.startsWith('mock_')) {
+    medicationShipments.value = [body.medicationShipment, ...medicationShipments.value];
+    if (body.medicationShipment.aroraOrderId?.startsWith('mock_order_')) {
       shipmentMessage.value = 'Mock order created. No Arora request was sent.';
     } else if (body.medicationShipment.dryRun) {
       shipmentMessage.value = 'Dry run ready. Configure Arora credentials to place the paid product order.';
@@ -313,6 +364,9 @@ onMounted(async () => {
                 <v-btn color="primary" prepend-icon="mdi-cart-check" :loading="loading" @click="requestMedicationShipment">
                   Place order
                 </v-btn>
+                <v-btn class="ml-sm-3 mt-3 mt-sm-0" prepend-icon="mdi-refresh" variant="text" @click="loadMedicationShipments">
+                  Refresh status
+                </v-btn>
 
                 <v-alert v-if="shipmentMessage" class="mt-5" type="success" variant="tonal">
                   {{ shipmentMessage }}
@@ -323,14 +377,14 @@ onMounted(async () => {
             <v-col cols="12" md="4">
               <v-card class="nexus-card pa-5 h-100">
                 <div class="label mb-3">Arora status</div>
-                <template v-if="medicationShipment">
-                  <div class="serif text-h5 mb-2">{{ medicationShipment.status }}</div>
+                <template v-if="latestMedicationShipment">
+                  <div class="serif text-h5 mb-2">{{ formatShipmentStatus(latestMedicationShipment.status) }}</div>
                   <div class="text-body-2 text-medium-emphasis mb-3">
-                    {{ shipmentModeLabel }} · {{ medicationShipment.clientProductId }}
+                    {{ shipmentModeLabel }} · {{ latestMedicationShipment.clientProductId }}
                   </div>
                   <v-list density="compact" class="pa-0 bg-transparent">
-                    <v-list-item title="Order ID" :subtitle="medicationShipment.aroraOrderId ?? 'Pending'" />
-                    <v-list-item title="Patient ID" :subtitle="medicationShipment.aroraPatientId ?? 'Pending'" />
+                    <v-list-item title="Order ID" :subtitle="latestMedicationShipment.aroraOrderId ?? 'Pending'" />
+                    <v-list-item title="Patient ID" :subtitle="latestMedicationShipment.aroraPatientId ?? 'Pending'" />
                   </v-list>
                 </template>
                 <template v-else>

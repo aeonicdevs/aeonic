@@ -77,6 +77,54 @@ class PatientMedicationShipmentRequest(BaseModel):
     amount: str | None = None
 
 
+class AdminMedicationShipmentStatusUpdate(BaseModel):
+    status: str = Field(min_length=1)
+
+
+ARORA_ORDER_STAGES: tuple[dict[str, str], ...] = (
+    {
+        "value": "pending_review",
+        "label": "Pending review",
+        "description": "Arora has accepted the paid product order and it is waiting for clinical review.",
+    },
+    {
+        "value": "action_required",
+        "label": "Action required",
+        "description": "The order needs patient, provider, payment, or operations follow-up before it can move forward.",
+    },
+    {
+        "value": "prescription_approved",
+        "label": "Prescription approved",
+        "description": "The provider has approved the prescription attached to the order.",
+    },
+    {
+        "value": "prescription_rejected",
+        "label": "Prescription rejected",
+        "description": "The provider declined the prescription or the patient is not eligible.",
+    },
+    {
+        "value": "pharmacy_submitted",
+        "label": "Pharmacy submitted",
+        "description": "The approved prescription has been submitted to the fulfillment pharmacy.",
+    },
+    {
+        "value": "shipped",
+        "label": "Shipped",
+        "description": "The pharmacy has shipped the medication order.",
+    },
+    {
+        "value": "delivered",
+        "label": "Delivered",
+        "description": "The shipment has been delivered.",
+    },
+    {
+        "value": "canceled",
+        "label": "Canceled",
+        "description": "The order was canceled before fulfillment.",
+    },
+)
+
+
 def _default_database_path() -> Path:
     configured_path = os.getenv("AEONIC_DATABASE_PATH")
     if configured_path:
@@ -150,11 +198,13 @@ def _initialize_database(database_path: str | Path) -> None:
                 dry_run INTEGER NOT NULL DEFAULT 1,
                 request_payload TEXT NOT NULL,
                 response_payload TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
         _ensure_partner_domain_cloudflare_columns(db)
+        _ensure_medication_shipment_columns(db)
 
 
 def _ensure_partner_domain_cloudflare_columns(db: sqlite3.Connection) -> None:
@@ -172,6 +222,13 @@ def _ensure_partner_domain_cloudflare_columns(db: sqlite3.Connection) -> None:
     for column, statement in migrations.items():
         if column not in columns:
             db.execute(statement)
+
+
+def _ensure_medication_shipment_columns(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(medication_shipments)").fetchall()}
+    if "updated_at" not in columns:
+        db.execute("ALTER TABLE medication_shipments ADD COLUMN updated_at TEXT")
+        db.execute("UPDATE medication_shipments SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP)")
 
 
 def _normalize_email(email: str) -> str:
@@ -245,8 +302,27 @@ def _public_medication_shipment(shipment: sqlite3.Row) -> dict[str, Any]:
         "dryRun": bool(shipment["dry_run"]),
         "request": json.loads(shipment["request_payload"]),
         "response": json.loads(response_payload) if response_payload else None,
+        "updatedAt": shipment["updated_at"],
         "createdAt": shipment["created_at"],
     }
+
+
+def _public_admin_medication_shipment(shipment: sqlite3.Row) -> dict[str, Any]:
+    public_shipment = _public_medication_shipment(shipment)
+    public_shipment.update(
+        {
+            "patientName": shipment["patient_name"],
+            "patientEmail": shipment["patient_email"],
+            "partnerName": shipment["partner_name"],
+            "partnerEmail": shipment["partner_email"],
+            "partnerClinicDomain": shipment["partner_clinic_domain"],
+        }
+    )
+    return public_shipment
+
+
+def _arora_order_stage_values() -> set[str]:
+    return {stage["value"] for stage in ARORA_ORDER_STAGES}
 
 
 def _arora_patient_payload(
@@ -1435,6 +1511,22 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 "partner": _public_partner(partner),
             }
 
+    @app.get("/patients/medication-shipments", tags=["patients"])
+    def patient_medication_shipments(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            shipments = db.execute(
+                """
+                SELECT *
+                FROM medication_shipments
+                WHERE patient_id = ?
+                ORDER BY created_at DESC
+                """,
+                (patient_id,),
+            ).fetchall()
+
+            return {"medicationShipments": [_public_medication_shipment(shipment) for shipment in shipments]}
+
     @app.post("/patients/medication-shipments", tags=["patients"])
     def patient_medication_shipment(
         payload: PatientMedicationShipmentRequest,
@@ -1474,12 +1566,13 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             }
 
             shipment_id = uuid.uuid4().hex
+            now = datetime.now(UTC).isoformat()
             db.execute(
                 """
                 INSERT INTO medication_shipments (
-                    id, partner_id, patient_id, client_product_id, status, dry_run, request_payload
+                    id, partner_id, patient_id, client_product_id, status, dry_run, request_payload, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     shipment_id,
@@ -1489,6 +1582,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                     "dry_run_ready" if dry_run else "creating_mock_order" if mock_run else "creating_arora_order",
                     int(dry_run),
                     json.dumps(request_payload, sort_keys=True),
+                    now,
                 ),
             )
 
@@ -1500,10 +1594,10 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 db.execute(
                     """
                     UPDATE medication_shipments
-                    SET response_payload = ?
+                    SET response_payload = ?, updated_at = ?
                     WHERE id = ?
                     """,
-                    (json.dumps(response_payload, sort_keys=True), shipment_id),
+                    (json.dumps(response_payload, sort_keys=True), datetime.now(UTC).isoformat(), shipment_id),
                 )
             elif mock_run:
                 arora_patient = _mock_arora_patient_response(arora_patient_payload)
@@ -1519,14 +1613,15 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 db.execute(
                     """
                     UPDATE medication_shipments
-                    SET arora_patient_id = ?, arora_order_id = ?, status = ?, dry_run = 0, response_payload = ?
+                    SET arora_patient_id = ?, arora_order_id = ?, status = ?, dry_run = 0, response_payload = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (
                         arora_patient_id,
                         arora_order_id,
-                        "mock_order_created",
+                        arora_order["data"].get("orderStatus") or "pending_review",
                         json.dumps(response_payload, sort_keys=True),
+                        datetime.now(UTC).isoformat(),
                         shipment_id,
                     ),
                 )
@@ -1549,14 +1644,15 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 db.execute(
                     """
                     UPDATE medication_shipments
-                    SET arora_patient_id = ?, arora_order_id = ?, status = ?, dry_run = 0, response_payload = ?
+                    SET arora_patient_id = ?, arora_order_id = ?, status = ?, dry_run = 0, response_payload = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (
                         arora_patient_id,
                         arora_order_id,
-                        "order_created",
+                        arora_order_data.get("orderStatus") or "pending_review",
                         json.dumps(response_payload, sort_keys=True),
+                        datetime.now(UTC).isoformat(),
                         shipment_id,
                     ),
                 )
@@ -1566,6 +1662,77 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=500, detail="Unable to create medication shipment request")
 
             return {"medicationShipment": _public_medication_shipment(shipment)}
+
+    @app.get("/admin/order-stages", tags=["admin"])
+    def admin_order_stages() -> dict[str, object]:
+        return {"stages": list(ARORA_ORDER_STAGES)}
+
+    @app.get("/admin/medication-shipments", tags=["admin"])
+    def admin_medication_shipments() -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            shipments = db.execute(
+                """
+                SELECT
+                    medication_shipments.*,
+                    patients.name AS patient_name,
+                    patients.email AS patient_email,
+                    partners.clinic_name AS partner_name,
+                    partners.email AS partner_email,
+                    partners.clinic_domain AS partner_clinic_domain
+                FROM medication_shipments
+                JOIN patients ON patients.id = medication_shipments.patient_id
+                JOIN partners ON partners.id = medication_shipments.partner_id
+                ORDER BY medication_shipments.created_at DESC
+                """
+            ).fetchall()
+
+            return {
+                "stages": list(ARORA_ORDER_STAGES),
+                "medicationShipments": [_public_admin_medication_shipment(shipment) for shipment in shipments],
+            }
+
+    @app.patch("/admin/medication-shipments/{shipment_id}", tags=["admin"])
+    def admin_update_medication_shipment(
+        shipment_id: str,
+        payload: AdminMedicationShipmentStatusUpdate,
+    ) -> dict[str, object]:
+        status = payload.status.strip()
+        if status not in _arora_order_stage_values():
+            raise HTTPException(status_code=422, detail="Unknown Arora order stage")
+
+        with _connect(resolved_database_path) as db:
+            existing = db.execute("SELECT id FROM medication_shipments WHERE id = ?", (shipment_id,)).fetchone()
+            if existing is None:
+                raise HTTPException(status_code=404, detail="Medication shipment not found")
+
+            db.execute(
+                """
+                UPDATE medication_shipments
+                SET status = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (status, datetime.now(UTC).isoformat(), shipment_id),
+            )
+            shipment = db.execute(
+                """
+                SELECT
+                    medication_shipments.*,
+                    patients.name AS patient_name,
+                    patients.email AS patient_email,
+                    partners.clinic_name AS partner_name,
+                    partners.email AS partner_email,
+                    partners.clinic_domain AS partner_clinic_domain
+                FROM medication_shipments
+                JOIN patients ON patients.id = medication_shipments.patient_id
+                JOIN partners ON partners.id = medication_shipments.partner_id
+                WHERE medication_shipments.id = ?
+                """,
+                (shipment_id,),
+            ).fetchone()
+            if shipment is None:
+                raise HTTPException(status_code=500, detail="Unable to update medication shipment")
+
+            return {"medicationShipment": _public_admin_medication_shipment(shipment)}
 
     return app
 

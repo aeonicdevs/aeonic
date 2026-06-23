@@ -1,59 +1,79 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
-const ORDERS_KEY = 'aeonic.admin.mock-orders';
 
 type ApiStatus = 'checking' | 'online' | 'offline';
-type OrderStage =
-  | 'intake_received'
-  | 'clinical_review'
-  | 'prescription_approved'
-  | 'pharmacy_submitted'
-  | 'fulfilled'
-  | 'exception';
 
-type MockOrder = {
-  id: string;
-  patientName: string;
-  partnerName: string;
-  product: string;
-  stage: OrderStage;
-  aroraOrderId: string;
-  updatedAt: string;
+type OrderStage = {
+  value: string;
+  label: string;
+  description: string;
 };
 
-const stages: Array<{ value: OrderStage; label: string; icon: string; color: string }> = [
-  { value: 'intake_received', label: 'Intake received', icon: 'mdi-clipboard-text-clock', color: 'info' },
-  { value: 'clinical_review', label: 'Clinical review', icon: 'mdi-stethoscope', color: 'primary' },
-  { value: 'prescription_approved', label: 'Prescription approved', icon: 'mdi-prescription', color: 'success' },
-  { value: 'pharmacy_submitted', label: 'Pharmacy submitted', icon: 'mdi-pharmacy', color: 'accent' },
-  { value: 'fulfilled', label: 'Fulfilled', icon: 'mdi-package-variant-closed-check', color: 'success' },
-  { value: 'exception', label: 'Exception', icon: 'mdi-alert-circle', color: 'warning' },
+type MedicationShipment = {
+  id: string;
+  patientId: string;
+  partnerId: string;
+  patientName: string;
+  patientEmail: string;
+  partnerName: string;
+  partnerEmail: string;
+  partnerClinicDomain: string | null;
+  clientProductId: string;
+  aroraPatientId: string | null;
+  aroraOrderId: string | null;
+  status: string;
+  dryRun: boolean;
+  response: { message?: string; expectedOutcome?: string } | null;
+  updatedAt: string;
+  createdAt: string;
+};
+
+const fallbackStages: OrderStage[] = [
+  {
+    value: 'pending_review',
+    label: 'Pending review',
+    description: 'Arora has accepted the paid product order and it is waiting for clinical review.',
+  },
 ];
+
+const stageVisuals: Record<string, { icon: string; color: string }> = {
+  pending_review: { icon: 'mdi-clipboard-text-clock', color: 'info' },
+  action_required: { icon: 'mdi-alert-circle', color: 'warning' },
+  prescription_approved: { icon: 'mdi-prescription', color: 'success' },
+  prescription_rejected: { icon: 'mdi-close-octagon', color: 'error' },
+  pharmacy_submitted: { icon: 'mdi-pharmacy', color: 'accent' },
+  shipped: { icon: 'mdi-truck-delivery', color: 'primary' },
+  delivered: { icon: 'mdi-package-variant-closed-check', color: 'success' },
+  canceled: { icon: 'mdi-cancel', color: 'error' },
+};
 
 const apiStatus = ref<ApiStatus>('checking');
 const apiMessage = ref('Checking API connection');
-const orders = ref<MockOrder[]>([]);
-const selectedStage = ref<OrderStage | 'all'>('all');
+const orders = ref<MedicationShipment[]>([]);
+const stages = ref<OrderStage[]>(fallbackStages);
+const selectedStage = ref('all');
 const notice = ref('');
+const error = ref('');
+const loading = ref(false);
+const updatingOrderId = ref('');
 
-const draft = reactive({
-  patientName: 'Jordan Ellis',
-  partnerName: 'Demo Longevity Clinic',
-  product: 'Foundational peptide protocol',
-});
-
-const stageItems = computed(() => stages.map((stage) => ({ title: stage.label, value: stage.value })));
+const stageItems = computed(() => stages.value.map((stage) => ({ title: stage.label, value: stage.value })));
 
 const filteredOrders = computed(() => {
   if (selectedStage.value === 'all') return orders.value;
-  return orders.value.filter((order) => order.stage === selectedStage.value);
+  return orders.value.filter((order) => order.status === selectedStage.value);
 });
 
-const activeOrders = computed(() => orders.value.filter((order) => !['fulfilled', 'exception'].includes(order.stage)));
-const completedOrders = computed(() => orders.value.filter((order) => order.stage === 'fulfilled'));
-const exceptionOrders = computed(() => orders.value.filter((order) => order.stage === 'exception'));
+const terminalStatuses = new Set(['delivered', 'canceled', 'prescription_rejected']);
+const activeOrders = computed(() => orders.value.filter((order) => !terminalStatuses.has(order.status)));
+const completedOrders = computed(() => orders.value.filter((order) => order.status === 'delivered'));
+const exceptionOrders = computed(() => orders.value.filter((order) => (
+  order.status === 'action_required'
+  || order.status === 'canceled'
+  || order.status === 'prescription_rejected'
+)));
 
 const statusCopy = computed(() => {
   if (apiStatus.value === 'online') {
@@ -65,45 +85,50 @@ const statusCopy = computed(() => {
   return { color: 'info', icon: 'mdi-progress-clock', label: 'Checking API' };
 });
 
-function stageFor(value: OrderStage) {
-  return stages.find((stage) => stage.value === value) ?? stages[0];
+function stageFor(value: string) {
+  const metadata = stages.value.find((stage) => stage.value === value) ?? {
+    value,
+    label: value.replace(/_/g, ' '),
+    description: 'Unrecognized order stage.',
+  };
+  const visual = stageVisuals[value] ?? { icon: 'mdi-progress-question', color: 'default' };
+  return { ...metadata, ...visual };
 }
 
-function saveOrders() {
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders.value));
-}
+async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
-function loadOrders() {
-  const raw = localStorage.getItem(ORDERS_KEY);
-  if (!raw) {
-    orders.value = [
-      {
-        id: 'mock-1007',
-        patientName: 'Maya Chen',
-        partnerName: 'Demo Longevity Clinic',
-        product: 'Metabolic optimization kit',
-        stage: 'clinical_review',
-        aroraOrderId: 'ARORA-MOCK-1007',
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: 'mock-1008',
-        patientName: 'Alex Rivera',
-        partnerName: 'Viper Dental Wellness',
-        product: 'Sleep support protocol',
-        stage: 'pharmacy_submitted',
-        aroraOrderId: 'ARORA-MOCK-1008',
-        updatedAt: new Date().toISOString(),
-      },
-    ];
-    saveOrders();
-    return;
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.detail ?? 'Something went wrong');
   }
 
+  return body as T;
+}
+
+async function loadOrders() {
+  loading.value = true;
+  error.value = '';
   try {
-    orders.value = JSON.parse(raw) as MockOrder[];
-  } catch {
-    orders.value = [];
+    const body = await api<{ stages: OrderStage[]; medicationShipments: MedicationShipment[] }>(
+      '/admin/medication-shipments',
+    );
+    stages.value = body.stages.length ? body.stages : fallbackStages;
+    orders.value = body.medicationShipments;
+    apiStatus.value = 'online';
+    apiMessage.value = 'Backend API returned the admin medication queue.';
+  } catch (err) {
+    apiStatus.value = 'offline';
+    apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
+    error.value = 'Unable to load the admin order queue.';
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -122,42 +147,29 @@ async function checkApi() {
   }
 }
 
-function createOrder() {
-  const nextNumber = orders.value.length + 1009;
-  const now = new Date().toISOString();
-  orders.value = [
-    {
-      id: `mock-${nextNumber}`,
-      patientName: draft.patientName.trim() || 'Test Patient',
-      partnerName: draft.partnerName.trim() || 'Demo Clinic',
-      product: draft.product.trim() || 'Mock protocol',
-      stage: 'intake_received',
-      aroraOrderId: `ARORA-MOCK-${nextNumber}`,
-      updatedAt: now,
-    },
-    ...orders.value,
-  ];
-  notice.value = 'Mock order created.';
-  saveOrders();
-}
+async function moveOrderTo(order: MedicationShipment, status: unknown) {
+  if (typeof status !== 'string' || !stages.value.some((stage) => stage.value === status)) return;
 
-function moveOrder(order: MockOrder, stage: OrderStage) {
-  orders.value = orders.value.map((item) => (
-    item.id === order.id ? { ...item, stage, updatedAt: new Date().toISOString() } : item
-  ));
-  notice.value = `${order.aroraOrderId} moved to ${stageFor(stage).label}.`;
-  saveOrders();
-}
-
-function moveOrderTo(order: MockOrder, stage: unknown) {
-  if (!stages.some((item) => item.value === stage)) return;
-  moveOrder(order, stage as OrderStage);
-}
-
-function resetOrders() {
-  localStorage.removeItem(ORDERS_KEY);
-  loadOrders();
-  notice.value = 'Mock queue reset.';
+  updatingOrderId.value = order.id;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ medicationShipment: MedicationShipment }>(
+      `/admin/medication-shipments/${order.id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      },
+    );
+    orders.value = orders.value.map((item) => (
+      item.id === order.id ? body.medicationShipment : item
+    ));
+    notice.value = `${order.aroraOrderId ?? order.id} moved to ${stageFor(status).label}.`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to update order status.';
+  } finally {
+    updatingOrderId.value = '';
+  }
 }
 
 function formatTimestamp(value: string) {
@@ -169,9 +181,9 @@ function formatTimestamp(value: string) {
   }).format(new Date(value));
 }
 
-onMounted(() => {
-  loadOrders();
-  void checkApi();
+onMounted(async () => {
+  await checkApi();
+  await loadOrders();
 });
 </script>
 
@@ -200,13 +212,15 @@ onMounted(() => {
         <div class="d-flex flex-column flex-md-row align-md-end ga-4 mb-6">
           <div>
             <div class="label mb-3">Manual testing</div>
-            <h1 class="serif text-h3 mb-2">Order and prescription simulator</h1>
+            <h1 class="serif text-h3 mb-2">Order and prescription queue</h1>
             <div class="text-medium-emphasis">
-              Create local mock orders and move them through the external states Aeonic will receive from Arora.
+              Orders placed in a local partner Nexus app appear here for Arora stage simulation.
             </div>
           </div>
           <v-spacer />
-          <v-btn color="primary" prepend-icon="mdi-refresh" variant="flat" @click="checkApi">Check API</v-btn>
+          <v-btn color="primary" prepend-icon="mdi-refresh" :loading="loading" variant="flat" @click="loadOrders">
+            Refresh queue
+          </v-btn>
         </div>
 
         <v-alert class="mb-5" :color="statusCopy.color" :icon="statusCopy.icon" variant="tonal">
@@ -215,6 +229,9 @@ onMounted(() => {
 
         <v-alert v-if="notice" class="mb-5" type="success" variant="tonal" closable @click:close="notice = ''">
           {{ notice }}
+        </v-alert>
+        <v-alert v-if="error" class="mb-5" type="error" variant="tonal" closable @click:close="error = ''">
+          {{ error }}
         </v-alert>
 
         <v-row class="mb-5">
@@ -227,97 +244,78 @@ onMounted(() => {
           </v-col>
           <v-col cols="12" md="4">
             <div class="stat">
-              <div class="label mb-2">Fulfilled</div>
+              <div class="label mb-2">Delivered</div>
               <div class="serif text-h4">{{ completedOrders.length }}</div>
               <div class="text-caption text-medium-emphasis mt-1">Completed simulations.</div>
             </div>
           </v-col>
           <v-col cols="12" md="4">
             <div class="stat">
-              <div class="label mb-2">Exceptions</div>
+              <div class="label mb-2">Needs attention</div>
               <div class="serif text-h4">{{ exceptionOrders.length }}</div>
-              <div class="text-caption text-medium-emphasis mt-1">Needs operator attention.</div>
+              <div class="text-caption text-medium-emphasis mt-1">Action required, canceled, or rejected.</div>
             </div>
           </v-col>
         </v-row>
 
-        <v-row align="start">
-          <v-col cols="12" lg="4">
-            <v-card class="panel pa-5">
-              <div class="d-flex align-center ga-3 mb-5">
-                <v-icon color="primary" icon="mdi-plus-circle" />
-                <div>
-                  <h2 class="text-h6 mb-0">Create mock order</h2>
-                  <div class="text-body-2 text-medium-emphasis">Stored locally until backend admin endpoints exist.</div>
+        <v-card class="panel pa-5">
+          <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
+            <div>
+              <h2 class="text-h6 mb-0">Medication shipments</h2>
+              <div class="text-body-2 text-medium-emphasis">Advance a row to simulate the next Arora API state.</div>
+            </div>
+            <v-spacer />
+            <v-select
+              v-model="selectedStage"
+              class="stage-filter"
+              density="compact"
+              hide-details
+              :items="[{ title: 'All stages', value: 'all' }, ...stageItems]"
+              label="Stage"
+            />
+          </div>
+
+          <div class="order-list">
+            <div v-for="order in filteredOrders" :key="order.id" class="order-row">
+              <div class="order-main">
+                <div class="d-flex align-center ga-2 mb-2">
+                  <v-icon :color="stageFor(order.status).color" :icon="stageFor(order.status).icon" size="20" />
+                  <strong>{{ order.patientName }}</strong>
+                  <v-chip :color="stageFor(order.status).color" size="small" variant="tonal">
+                    {{ stageFor(order.status).label }}
+                  </v-chip>
+                </div>
+                <div class="text-body-2 text-medium-emphasis">
+                  {{ order.partnerName }} - {{ order.clientProductId }}
+                </div>
+                <div class="order-meta mt-3">
+                  <v-chip size="small" variant="tonal">{{ order.aroraOrderId ?? 'Pending Arora order' }}</v-chip>
+                  <span>{{ order.patientEmail }}</span>
+                  <span>{{ formatTimestamp(order.updatedAt) }}</span>
                 </div>
               </div>
 
-              <v-text-field v-model="draft.patientName" label="Patient name" />
-              <v-text-field v-model="draft.partnerName" label="Partner clinic" />
-              <v-text-field v-model="draft.product" label="Protocol or product" />
-
-              <v-btn block color="primary" prepend-icon="mdi-playlist-plus" size="large" @click="createOrder">
-                Add to simulator
-              </v-btn>
-            </v-card>
-          </v-col>
-
-          <v-col cols="12" lg="8">
-            <v-card class="panel pa-5">
-              <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
-                <div>
-                  <h2 class="text-h6 mb-0">Mock Arora queue</h2>
-                  <div class="text-body-2 text-medium-emphasis">Use the stage menu on each row to simulate an external update.</div>
-                </div>
-                <v-spacer />
+              <div class="order-actions">
                 <v-select
-                  v-model="selectedStage"
-                  class="stage-filter"
                   density="compact"
                   hide-details
-                  :items="[{ title: 'All stages', value: 'all' }, ...stageItems]"
+                  :items="stageItems"
                   label="Stage"
-                />
-                <v-btn icon="mdi-restore" variant="text" @click="resetOrders" />
-              </div>
-
-              <div class="order-list">
-                <div v-for="order in filteredOrders" :key="order.id" class="order-row">
-                  <div class="order-main">
-                    <div class="d-flex align-center ga-2 mb-2">
-                      <v-icon :color="stageFor(order.stage).color" :icon="stageFor(order.stage).icon" size="20" />
-                      <strong>{{ order.patientName }}</strong>
-                    </div>
-                    <div class="text-body-2 text-medium-emphasis">
-                      {{ order.partnerName }} - {{ order.product }}
-                    </div>
-                    <div class="order-meta mt-3">
-                      <v-chip size="small" variant="tonal">{{ order.aroraOrderId }}</v-chip>
-                      <span>{{ formatTimestamp(order.updatedAt) }}</span>
-                    </div>
-                  </div>
-
-                  <div class="order-actions">
-                    <v-select
-                      density="compact"
-                      hide-details
-                      :items="stageItems"
-                      label="Stage"
-                      :model-value="order.stage"
-                      @update:model-value="moveOrderTo(order, $event)"
-                    />
-                  </div>
-                </div>
-
-                <v-empty-state
-                  v-if="filteredOrders.length === 0"
-                  icon="mdi-clipboard-search"
-                  title="No orders match this stage"
+                  :loading="updatingOrderId === order.id"
+                  :model-value="order.status"
+                  @update:model-value="moveOrderTo(order, $event)"
                 />
               </div>
-            </v-card>
-          </v-col>
-        </v-row>
+            </div>
+
+            <v-empty-state
+              v-if="filteredOrders.length === 0"
+              icon="mdi-clipboard-search"
+              title="No orders yet"
+              text="Place an order from a local Nexus patient account, then refresh this queue."
+            />
+          </div>
+        </v-card>
       </v-container>
     </v-main>
   </v-app>

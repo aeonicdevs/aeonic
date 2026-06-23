@@ -102,6 +102,14 @@ http://127.0.0.1:5173/?clinicHost=app.viper.guru
 
 That lets you exercise the same API domain mapping without waiting for a production deploy or changing DNS. In production, the clinic's patient-facing DNS record should point at the Nexus deployment. Nexus sends the browser host to the API, and the API resolves that host to the configured partner.
 
+To test the patient-to-admin order loop locally:
+
+1. In Partner, save a patient-facing domain such as `app.viper.guru`.
+2. Open Nexus at `http://127.0.0.1:5173/?clinicHost=app.viper.guru`.
+3. Sign up or log in as a patient and place an order.
+4. Open Admin at `http://127.0.0.1:5175`, refresh the queue, and advance the order through the Arora stage menu.
+5. Back in Nexus, use Refresh status to see the latest simulated stage.
+
 For Cloudflare Tunnel testing, keep saving the real or simulated patient-facing domain in the Partner app, for example `app.viper.guru`. Do not save the local tunnel hostname as partner data. Instead, set `AEONIC_DEV_DOMAIN_ALIASES` so the API treats your local tunnel hostname as an alias for that patient domain.
 
 In development, the API allows localhost origins on any port so Vite can auto-select a free port without breaking API calls.
