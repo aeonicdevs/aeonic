@@ -175,6 +175,60 @@ def test_patient_medication_shipment_defaults_to_mock_order(monkeypatch, tmp_pat
     assert shipment["response"]["order"]["data"]["orderStatus"] == "pending_review"
     assert shipment["response"]["order"]["data"]["requiredActions"] == []
 
+    orders = client.get(
+        "/patients/arora/orders",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert orders.status_code == 200
+    order = orders.json()["orders"][0]
+    assert order["orderId"] == shipment["aroraOrderId"]
+    assert order["clientProductId"] == "mock_client_product_order"
+    assert order["paymentStatus"] == "paid"
+    assert order["amount"] == 19900
+
+    forms = client.get(
+        f"/patients/arora/orders/{shipment['aroraOrderId']}/forms",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert forms.status_code == 200
+    assert forms.json()["order"]["orderId"] == shipment["aroraOrderId"]
+    assert forms.json()["forms"][0]["formKey"] == "provider_network:mock:intake"
+
+    labs = client.get(
+        "/patients/arora/labs",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert labs.status_code == 200
+    assert any(lab["clientProductId"] == "mock_lab_foundation_panel" for lab in labs.json()["labs"])
+
+    visits = client.get(
+        "/patients/arora/visits",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert visits.status_code == 200
+    assert visits.json()["visits"][0]["orderId"] == shipment["aroraOrderId"]
+
+    conversations = client.get(
+        "/patients/arora/conversations",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert conversations.status_code == 200
+    assert conversations.json()["conversations"][0]["patientId"] == patient_id
+
+    prescriptions = client.get(
+        "/patients/arora/prescriptions",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert prescriptions.status_code == 200
+    assert prescriptions.json()["prescriptions"][0]["orderId"] == shipment["aroraOrderId"]
+
+    payments = client.get(
+        "/patients/arora/payments",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert payments.status_code == 200
+    assert payments.json()["payments"][0]["amount"] == 19900
+
 
 def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ARORA_API_MODE", "live")

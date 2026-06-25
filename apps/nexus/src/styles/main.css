@@ -176,6 +176,30 @@ body {
   gap: 8px;
 }
 
+.entity-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.entity-table {
+  border: 1px solid var(--ae-line-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.entity-table th {
+  color: var(--ae-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.entity-table td {
+  vertical-align: middle;
+}
+
 @media (max-width: 960px) {
   .chart-bars {
     height: 120px;

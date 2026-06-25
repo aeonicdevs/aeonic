@@ -388,6 +388,141 @@ def _public_medication_shipment(shipment: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def _shipment_request(shipment: sqlite3.Row) -> dict[str, Any]:
+    return json.loads(shipment["request_payload"])
+
+
+def _shipment_amount(shipment: sqlite3.Row) -> int:
+    request_payload = _shipment_request(shipment)
+    raw_amount = request_payload.get("order", {}).get("order", {}).get("amount")
+    try:
+        return int(round(float(raw_amount) * 100))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _shipment_order_id(shipment: sqlite3.Row) -> str:
+    return shipment["arora_order_id"] or shipment["id"]
+
+
+def _public_arora_order(shipment: sqlite3.Row) -> dict[str, Any]:
+    request_payload = _shipment_request(shipment)
+    product = request_payload.get("product", {}) if isinstance(request_payload.get("product"), dict) else {}
+    order = request_payload.get("order", {}).get("order", {})
+    client_product_id = shipment["client_product_id"]
+    return {
+        "orderId": _shipment_order_id(shipment),
+        "patientId": shipment["arora_patient_id"] or shipment["patient_id"],
+        "partnerPatientId": shipment["patient_id"],
+        "clientId": shipment["partner_id"],
+        "clientProductId": client_product_id,
+        "productId": product.get("productId") or client_product_id,
+        "productName": product.get("name") or product.get("displayName") or client_product_id,
+        "displayName": product.get("displayName") or product.get("name") or client_product_id,
+        "orderType": product.get("itemType") or "product",
+        "orderStatus": shipment["status"],
+        "paymentStatus": order.get("payment_status") or "paid",
+        "paymentVerificationStatus": "not_required",
+        "amount": _shipment_amount(shipment),
+        "quantity": 1,
+        "items": [],
+        "prescriptions": [],
+        "reviewRequired": "async",
+        "visitId": None,
+        "customFields": {},
+        "paymentGateway": "mock_arora",
+        "createdAt": shipment["created_at"],
+        "updatedAt": shipment["updated_at"],
+    }
+
+
+def _public_arora_payment(shipment: sqlite3.Row) -> dict[str, Any]:
+    order_id = _shipment_order_id(shipment)
+    return {
+        "paymentId": f"payment_{order_id}",
+        "orderId": order_id,
+        "patientId": shipment["arora_patient_id"] or shipment["patient_id"],
+        "amount": _shipment_amount(shipment),
+        "currency": "USD",
+        "status": "paid",
+        "paymentGateway": "mock_arora",
+        "createdAt": shipment["created_at"],
+        "updatedAt": shipment["updated_at"],
+    }
+
+
+def _public_order_forms(shipment: sqlite3.Row) -> dict[str, Any]:
+    order = _public_arora_order(shipment)
+    form_key = "provider_network:mock:intake"
+    form = {
+        "formKey": form_key,
+        "formId": "mock_intake",
+        "scopeType": "provider_network",
+        "providerNetworkId": "mock",
+        "name": "Medical Intake",
+        "formType": "intake",
+        "version": 1,
+        "completed": False,
+        "completionStatus": "pending",
+        "detailPath": f"/v2/client/forms/{urllib.parse.quote(form_key, safe='')}?orderId={order['orderId']}",
+    }
+    return {
+        "order": {
+            "orderId": order["orderId"],
+            "orderStatus": order["orderStatus"],
+            "formsCompletionStatus": "pending",
+            "clientProductId": order["clientProductId"],
+            "productId": order["productId"],
+        },
+        "patient": {
+            "patientId": order["patientId"],
+            "partnerPatientId": order["partnerPatientId"],
+        },
+        "requirementSummary": {
+            "totalForms": 1,
+            "completedForms": 0,
+            "remainingForms": 1,
+            "hasForms": True,
+            "formsCompletionStatus": "pending",
+        },
+        "forms": [form],
+    }
+
+
+def _public_arora_prescription(shipment: sqlite3.Row) -> dict[str, Any]:
+    order = _public_arora_order(shipment)
+    created_at = shipment["updated_at"] or shipment["created_at"]
+    return {
+        "prescriptionId": f"rx_{order['orderId']}",
+        "patientId": order["patientId"],
+        "clientId": order["clientId"],
+        "orderId": order["orderId"],
+        "chartReviewId": f"review_{order['orderId']}",
+        "providerNetworkId": "mock",
+        "providerUserId": "mock_provider",
+        "providerName": "Mock Provider",
+        "source": "mock_arora",
+        "medicationName": order["displayName"],
+        "dosage": "As directed",
+        "units": "package",
+        "instructions": "Follow provider instructions after clinical review.",
+        "quantity": 1,
+        "daysSupply": 30,
+        "refills": 0,
+        "status": "sent" if shipment["status"] in {"pharmacy_submitted", "shipped", "delivered"} else "pending_review",
+        "submittedToPharmacy": shipment["status"] in {"pharmacy_submitted", "shipped", "delivered"},
+        "trackingNumber": f"mock_tracking_{order['orderId']}" if shipment["status"] in {"shipped", "delivered"} else None,
+        "trackingCarrier": "Mock Carrier" if shipment["status"] in {"shipped", "delivered"} else None,
+        "trackingUrl": None,
+        "prescribedDate": created_at,
+        "submittedAt": created_at if shipment["status"] in {"pharmacy_submitted", "shipped", "delivered"} else None,
+        "shippedAt": created_at if shipment["status"] in {"shipped", "delivered"} else None,
+        "deliveredAt": created_at if shipment["status"] == "delivered" else None,
+        "createdAt": shipment["created_at"],
+        "updatedAt": shipment["updated_at"],
+    }
+
+
 def _patient_visible_arora_products(db: sqlite3.Connection) -> list[dict[str, Any]]:
     arora_client = MockAroraClient(db)
     return [
@@ -1633,6 +1768,150 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 }
             except AroraClientError as error:
                 _raise_arora_http_error(error)
+
+    @app.get("/patients/arora/orders", tags=["patients"])
+    def patient_arora_orders(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            shipments = db.execute(
+                """
+                SELECT *
+                FROM medication_shipments
+                WHERE patient_id = ?
+                ORDER BY created_at DESC
+                """,
+                (patient_id,),
+            ).fetchall()
+            return {
+                "mode": MockAroraClient.mode,
+                "orders": [_public_arora_order(shipment) for shipment in shipments],
+                "pagination": {"limit": 50, "hasMore": False, "nextCursor": None},
+            }
+
+    @app.get("/patients/arora/orders/{order_id}/forms", tags=["patients"])
+    def patient_arora_order_forms(
+        order_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            shipment = db.execute(
+                """
+                SELECT *
+                FROM medication_shipments
+                WHERE patient_id = ?
+                  AND (id = ? OR arora_order_id = ?)
+                """,
+                (patient_id, order_id, order_id),
+            ).fetchone()
+            if shipment is None:
+                raise HTTPException(status_code=404, detail="Order not found")
+            return {"mode": MockAroraClient.mode, **_public_order_forms(shipment)}
+
+    @app.get("/patients/arora/labs", tags=["patients"])
+    def patient_arora_labs(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            labs = [
+                {
+                    **product,
+                    "productId": product["clientProductId"],
+                }
+                for product in _patient_visible_arora_products(db)
+                if "labs" in product.get("displayCategoryIds", [])
+            ]
+            return {"mode": MockAroraClient.mode, "labs": labs}
+
+    @app.get("/patients/arora/visits", tags=["patients"])
+    def patient_arora_visits(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            shipments = db.execute(
+                """
+                SELECT *
+                FROM medication_shipments
+                WHERE patient_id = ?
+                ORDER BY created_at DESC
+                """,
+                (patient_id,),
+            ).fetchall()
+            visits = [
+                {
+                    "visitId": f"visit_{_shipment_order_id(shipment)}",
+                    "patientId": shipment["arora_patient_id"] or shipment["patient_id"],
+                    "orderId": _shipment_order_id(shipment),
+                    "status": "pending_review",
+                    "visitType": "async",
+                    "createdAt": shipment["created_at"],
+                    "updatedAt": shipment["updated_at"],
+                }
+                for shipment in shipments
+            ]
+            return {"mode": MockAroraClient.mode, "visits": visits}
+
+    @app.get("/patients/arora/conversations", tags=["patients"])
+    def patient_arora_conversations(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            created_at = patient["created_at"]
+            return {
+                "mode": MockAroraClient.mode,
+                "conversations": [
+                    {
+                        "conversationId": f"conv_{patient_id}",
+                        "patientId": patient_id,
+                        "status": "active",
+                        "subject": "Care team",
+                        "lastMessageText": "Conversation shell is ready for Arora message sync.",
+                        "createdAt": created_at,
+                        "updatedAt": created_at,
+                    }
+                ],
+            }
+
+    @app.get("/patients/arora/prescriptions", tags=["patients"])
+    def patient_arora_prescriptions(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            shipments = db.execute(
+                """
+                SELECT *
+                FROM medication_shipments
+                WHERE patient_id = ?
+                ORDER BY created_at DESC
+                """,
+                (patient_id,),
+            ).fetchall()
+            return {
+                "mode": MockAroraClient.mode,
+                "prescriptions": [_public_arora_prescription(shipment) for shipment in shipments],
+            }
+
+    @app.get("/patients/arora/payments", tags=["patients"])
+    def patient_arora_payments(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            shipments = db.execute(
+                """
+                SELECT *
+                FROM medication_shipments
+                WHERE patient_id = ?
+                ORDER BY created_at DESC
+                """,
+                (patient_id,),
+            ).fetchall()
+            return {
+                "mode": MockAroraClient.mode,
+                "payments": [_public_arora_payment(shipment) for shipment in shipments],
+            }
 
     @app.get("/patients/medication-shipments", tags=["patients"])
     def patient_medication_shipments(authorization: str | None = Header(default=None)) -> dict[str, object]:
