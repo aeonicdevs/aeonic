@@ -30,12 +30,29 @@ type MedicationShipment = {
   createdAt: string;
 };
 
+type AroraProduct = {
+  clientProductId: string;
+  name: string;
+  displayName: string;
+  customerPrice: number;
+  itemType: 'package' | null;
+  includedProducts: { clientProductId: string }[];
+  description: string;
+  displayDescription: string;
+  displayCategoryIds?: string[];
+  showPatient: boolean;
+  status: 'active' | 'inactive';
+  updatedAt: string;
+  createdAt: string;
+};
+
 const queryHost = new URLSearchParams(window.location.search).get('clinicHost');
 const resolvedHost = queryHost || window.location.host;
 const tokenKey = `aeonic.patient.token.${resolvedHost}`;
 
 const mode = ref<'signup' | 'login'>('signup');
 const loading = ref(false);
+const productLoading = ref(false);
 const error = ref('');
 const shipmentMessage = ref('');
 const partner = ref<Partner | null>(null);
@@ -43,6 +60,8 @@ const patient = ref<Patient | null>(null);
 const token = ref(localStorage.getItem(tokenKey) ?? '');
 const medicationShipment = ref<MedicationShipment | null>(null);
 const medicationShipments = ref<MedicationShipment[]>([]);
+const aroraProducts = ref<AroraProduct[]>([]);
+const selectedProductId = ref('');
 
 const signup = reactive({
   name: '',
@@ -56,7 +75,6 @@ const login = reactive({
 });
 
 const partnerLabel = computed(() => partner.value?.clinicName ?? 'Unconfigured clinic');
-const activeProtocol = computed(() => (patient.value ? 'New patient onboarding' : 'Awaiting sign in'));
 const clinicDomainLabel = computed(() => partner.value?.clinicDomain ?? resolvedHost);
 const shipmentModeLabel = computed(() => {
   if (!medicationShipment.value) return 'Not started';
@@ -64,6 +82,14 @@ const shipmentModeLabel = computed(() => {
   return medicationShipment.value.dryRun ? 'Dry run' : 'Live order';
 });
 const latestMedicationShipment = computed(() => medicationShipment.value ?? medicationShipments.value[0] ?? null);
+const selectedProduct = computed(() => (
+  aroraProducts.value.find((product) => product.clientProductId === selectedProductId.value) ?? null
+));
+const productItems = computed(() => aroraProducts.value.map((product) => ({
+  title: `${product.displayName} - ${formatCurrency(product.customerPrice)}`,
+  value: product.clientProductId,
+  subtitle: product.displayDescription || product.description || product.clientProductId,
+})));
 
 function formatApiDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail;
@@ -129,6 +155,13 @@ function formatShipmentStatus(status: string) {
   return status.replace(/_/g, ' ');
 }
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+  }).format(value);
+}
+
 async function loadContext() {
   loading.value = true;
   error.value = '';
@@ -151,10 +184,28 @@ async function restoreSession() {
     const body = await api<{ patient: Patient; partner: Partner }>('/patients/me');
     patient.value = body.patient;
     partner.value = body.partner;
+    await loadPatientProducts();
     await loadMedicationShipments();
   } catch {
     localStorage.removeItem(tokenKey);
     token.value = '';
+  }
+}
+
+async function loadPatientProducts() {
+  if (!token.value) return;
+
+  productLoading.value = true;
+  try {
+    const body = await api<{ mode: string; products: AroraProduct[] }>('/patients/arora/products');
+    aroraProducts.value = body.products;
+    if (selectedProductId.value && !body.products.some((product) => product.clientProductId === selectedProductId.value)) {
+      selectedProductId.value = '';
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to load Arora products';
+  } finally {
+    productLoading.value = false;
   }
 }
 
@@ -180,6 +231,8 @@ async function submitSignup() {
       body: JSON.stringify({ ...signup, host: resolvedHost }),
     });
     setSession(body.token, body.patient, body.partner);
+    await loadPatientProducts();
+    await loadMedicationShipments();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to create patient account';
   } finally {
@@ -197,6 +250,8 @@ async function submitLogin() {
       body: JSON.stringify({ ...login, host: resolvedHost }),
     });
     setSession(body.token, body.patient, body.partner);
+    await loadPatientProducts();
+    await loadMedicationShipments();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to log in';
   } finally {
@@ -207,18 +262,28 @@ async function submitLogin() {
 function signOut() {
   token.value = '';
   patient.value = null;
+  aroraProducts.value = [];
+  selectedProductId.value = '';
   resetShipmentFeedback();
   localStorage.removeItem(tokenKey);
 }
 
 async function requestMedicationShipment() {
+  if (!selectedProduct.value) {
+    error.value = 'Select a product before placing an order.';
+    return;
+  }
+
   loading.value = true;
   error.value = '';
   shipmentMessage.value = '';
   try {
     const body = await api<{ medicationShipment: MedicationShipment }>('/patients/medication-shipments', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        client_product_id: selectedProduct.value.clientProductId,
+        amount: selectedProduct.value.customerPrice.toFixed(2),
+      }),
     });
     medicationShipment.value = body.medicationShipment;
     medicationShipments.value = [body.medicationShipment, ...medicationShipments.value];
@@ -284,7 +349,7 @@ onMounted(async () => {
                 <div class="label mb-4">Patient portal</div>
                 <h1 class="serif text-h3 text-md-h2 mb-5">Welcome to {{ partnerLabel }}.</h1>
                 <p class="text-body-1 text-medium-emphasis mb-6">
-                  This first-pass Nexus shell proves the white-labeled host flow: the same app resolves the clinic from the domain, then scopes the patient account to that clinic.
+                  Sign in to view the product catalog your clinic has made available through Nexus.
                 </p>
                 <div class="patient-preview pa-4">
                   <div class="label mb-2">Detected host</div>
@@ -324,23 +389,14 @@ onMounted(async () => {
               <h1 class="serif text-h3 mb-2">Hi, {{ patient.name }}.</h1>
               <div class="text-medium-emphasis">{{ partnerLabel }} · {{ patient.email }}</div>
             </div>
-            <v-spacer />
-            <v-btn color="primary" prepend-icon="mdi-message-text-outline">Message care team</v-btn>
           </div>
 
           <v-row>
             <v-col cols="12" md="4">
               <v-card class="nexus-card pa-5 h-100">
-                <div class="label mb-3">Program</div>
-                <div class="serif text-h5 mb-2">{{ activeProtocol }}</div>
-                <div class="text-body-2 text-medium-emphasis">Intake, eligibility, protocols, and tasks will hang from this card.</div>
-              </v-card>
-            </v-col>
-            <v-col cols="12" md="4">
-              <v-card class="nexus-card pa-5 h-100">
-                <div class="label mb-3">Next step</div>
-                <div class="serif text-h5 mb-2">Complete intake</div>
-                <div class="text-body-2 text-medium-emphasis">This is the first patient workflow to replace with real forms.</div>
+                <div class="label mb-3">Account</div>
+                <div class="serif text-h5 mb-2">{{ patient.name }}</div>
+                <div class="text-body-2 text-medium-emphasis">{{ patient.email }}</div>
               </v-card>
             </v-col>
             <v-col cols="12" md="4">
@@ -348,6 +404,13 @@ onMounted(async () => {
                 <div class="label mb-3">Clinic domain</div>
                 <div class="serif text-h5 mb-2">{{ clinicDomainLabel }}</div>
                 <div class="text-body-2 text-medium-emphasis">Resolved by the API before account creation.</div>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-card class="nexus-card pa-5 h-100">
+                <div class="label mb-3">Orders</div>
+                <div class="serif text-h5 mb-2">{{ medicationShipments.length }}</div>
+                <div class="text-body-2 text-medium-emphasis">Medication shipment records returned for this patient.</div>
               </v-card>
             </v-col>
           </v-row>
@@ -358,13 +421,59 @@ onMounted(async () => {
                 <div class="label mb-3">Medication shipment</div>
                 <div class="serif text-h5 mb-2">Place order</div>
                 <div class="text-body-2 text-medium-emphasis mb-5">
-                  This creates the first mocked Arora product order for the signed-in patient.
+                  Select a patient-visible product from the mock Arora catalog before creating an order.
                 </div>
 
-                <v-btn color="primary" prepend-icon="mdi-cart-check" :loading="loading" @click="requestMedicationShipment">
+                <v-alert v-if="!productLoading && aroraProducts.length === 0" class="mb-5" type="warning" variant="tonal">
+                  No active patient-visible Arora products are available. Add one in the Admin product catalog.
+                </v-alert>
+
+                <v-select
+                  v-model="selectedProductId"
+                  class="mb-2"
+                  :items="productItems"
+                  item-title="title"
+                  item-value="value"
+                  label="Product"
+                  :loading="productLoading"
+                  :disabled="productLoading || aroraProducts.length === 0"
+                  persistent-hint
+                  hint="Only active products marked visible to patients are shown."
+                />
+
+                <div v-if="selectedProduct" class="selected-product mb-5">
+                  <div class="d-flex flex-column flex-sm-row align-sm-center ga-2">
+                    <div>
+                      <div class="text-subtitle-1 font-weight-bold">{{ selectedProduct.displayName }}</div>
+                      <div class="text-body-2 text-medium-emphasis">
+                        {{ selectedProduct.displayDescription || selectedProduct.description || selectedProduct.clientProductId }}
+                      </div>
+                    </div>
+                    <v-spacer />
+                    <v-chip color="primary" variant="tonal">{{ formatCurrency(selectedProduct.customerPrice) }}</v-chip>
+                  </div>
+                  <div class="product-meta mt-3">
+                    <v-chip size="small" variant="tonal">{{ selectedProduct.clientProductId }}</v-chip>
+                    <v-chip size="small" variant="tonal">{{ selectedProduct.itemType === 'package' ? 'Package' : 'Product' }}</v-chip>
+                    <v-chip v-if="selectedProduct.itemType === 'package'" size="small" variant="tonal">
+                      {{ selectedProduct.includedProducts.length }} included
+                    </v-chip>
+                  </div>
+                </div>
+
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-cart-check"
+                  :disabled="!selectedProduct"
+                  :loading="loading"
+                  @click="requestMedicationShipment"
+                >
                   Place order
                 </v-btn>
-                <v-btn class="ml-sm-3 mt-3 mt-sm-0" prepend-icon="mdi-refresh" variant="text" @click="loadMedicationShipments">
+                <v-btn class="ml-sm-3 mt-3 mt-sm-0" prepend-icon="mdi-refresh" variant="text" @click="loadPatientProducts">
+                  Refresh products
+                </v-btn>
+                <v-btn class="ml-sm-3 mt-3 mt-sm-0" prepend-icon="mdi-history" variant="text" @click="loadMedicationShipments">
                   Refresh status
                 </v-btn>
 

@@ -388,6 +388,32 @@ def _public_medication_shipment(shipment: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def _patient_visible_arora_products(db: sqlite3.Connection) -> list[dict[str, Any]]:
+    arora_client = MockAroraClient(db)
+    return [
+        product
+        for product in arora_client.list_products(include_inactive=False)
+        if product["showPatient"]
+    ]
+
+
+def _patient_visible_arora_product(
+    db: sqlite3.Connection,
+    client_product_id: str,
+) -> dict[str, Any] | None:
+    product = db.execute(
+        """
+        SELECT *
+        FROM arora_mock_products
+        WHERE client_product_id = ?
+          AND status = 'active'
+          AND show_patient = 1
+        """,
+        (client_product_id,),
+    ).fetchone()
+    return MockAroraClient._public_product(product) if product is not None else None
+
+
 def _public_admin_medication_shipment(shipment: sqlite3.Row) -> dict[str, Any]:
     public_shipment = _public_medication_shipment(shipment)
     public_shipment.update(
@@ -529,7 +555,7 @@ def _arora_base_url() -> str:
 
 
 def _arora_configured() -> bool:
-    return bool(os.getenv("ARORA_API_KEY") and os.getenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID"))
+    return bool(os.getenv("ARORA_API_KEY"))
 
 
 def _arora_run_mode() -> Literal["mock", "dry_run", "live"]:
@@ -1592,6 +1618,22 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 "partner": _public_partner(partner),
             }
 
+    @app.get("/patients/arora/products", tags=["patients"])
+    def patient_arora_products(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            try:
+                return {
+                    "mode": MockAroraClient.mode,
+                    "products": _patient_visible_arora_products(db),
+                }
+            except AroraClientError as error:
+                _raise_arora_http_error(error)
+
     @app.get("/patients/medication-shipments", tags=["patients"])
     def patient_medication_shipments(authorization: str | None = Header(default=None)) -> dict[str, object]:
         with _connect(resolved_database_path) as db:
@@ -1616,14 +1658,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         run_mode = _arora_run_mode()
         dry_run = run_mode == "dry_run"
         mock_run = run_mode == "mock"
-        configured_client_product_id = payload.client_product_id or os.getenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID")
-        if run_mode == "live" and not configured_client_product_id:
-            raise HTTPException(status_code=422, detail="Arora client product ID is required")
-
-        client_product_id = (
-            configured_client_product_id
-            or ("mock_client_product_order" if mock_run else "configure-arora-client-product-id")
-        ).strip()
+        client_product_id = (payload.client_product_id or "").strip()
         if not client_product_id:
             raise HTTPException(status_code=422, detail="Arora client product ID is required")
 
@@ -1637,6 +1672,10 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             if partner is None:
                 raise HTTPException(status_code=401, detail="Invalid bearer token")
 
+            selected_product = _patient_visible_arora_product(db, client_product_id)
+            if selected_product is None:
+                raise HTTPException(status_code=422, detail="Select an active patient-visible Arora product")
+
             arora_patient_payload = _arora_patient_payload(patient, payload)
             arora_order_payload = _arora_order_payload(patient["id"], client_product_id, payload)
             request_payload = {
@@ -1644,6 +1683,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 "orderEndpoint": "POST /v2/client/orders",
                 "patient": arora_patient_payload,
                 "order": arora_order_payload,
+                "product": selected_product,
             }
 
             shipment_id = uuid.uuid4().hex
@@ -1669,7 +1709,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
             if dry_run:
                 response_payload = {
-                    "message": "Dry run only. Set ARORA_API_KEY, ARORA_DEFAULT_CLIENT_PRODUCT_ID, and ARORA_DRY_RUN=false to create the order in Arora.",
+                    "message": "Dry run only. Set ARORA_API_KEY and ARORA_DRY_RUN=false to create the order in Arora.",
                     "expectedOutcome": "A paid product order enters Arora/GEN clinical review; prescription shipment follows provider approval and pharmacy submission.",
                 }
                 db.execute(

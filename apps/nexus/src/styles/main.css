@@ -163,6 +163,19 @@ body {
   background: #fbfaf7;
 }
 
+.selected-product {
+  border: 1px solid var(--ae-line-soft);
+  border-radius: 8px;
+  background: #fbfaf7;
+  padding: 16px;
+}
+
+.product-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @media (max-width: 960px) {
   .chart-bars {
     height: 120px;

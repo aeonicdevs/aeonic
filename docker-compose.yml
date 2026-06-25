@@ -16,7 +16,6 @@ services:
       ARORA_API_BASE_URL: ${ARORA_API_BASE_URL:-https://api.gen-health.app}
       ARORA_API_MODE: ${ARORA_API_MODE:-mock}
       ARORA_API_KEY: ${ARORA_API_KEY:-}
-      ARORA_DEFAULT_CLIENT_PRODUCT_ID: ${ARORA_DEFAULT_CLIENT_PRODUCT_ID:-}
       ARORA_DRY_RUN: ${ARORA_DRY_RUN:-}
     expose:
       - "8000"

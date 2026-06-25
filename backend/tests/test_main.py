@@ -127,16 +127,33 @@ def _create_patient_session(client: TestClient, suffix: str) -> tuple[str, str]:
 def test_patient_medication_shipment_defaults_to_mock_order(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("ARORA_API_MODE", raising=False)
     monkeypatch.delenv("ARORA_API_KEY", raising=False)
-    monkeypatch.delenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID", raising=False)
     monkeypatch.delenv("ARORA_DRY_RUN", raising=False)
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]
     patient_token, patient_id = _create_patient_session(client, suffix)
 
-    response = client.post(
+    products = client.get(
+        "/patients/arora/products",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert products.status_code == 200
+    assert products.json()["mode"] == "mock"
+    assert any(
+        product["clientProductId"] == "mock_client_product_order"
+        for product in products.json()["products"]
+    )
+
+    empty_response = client.post(
         "/patients/medication-shipments",
         headers={"Authorization": f"Bearer {patient_token}"},
         json={},
+    )
+    assert empty_response.status_code == 422
+
+    response = client.post(
+        "/patients/medication-shipments",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={"client_product_id": "mock_client_product_order", "amount": "199.00"},
     )
 
     assert response.status_code == 200
@@ -153,6 +170,8 @@ def test_patient_medication_shipment_defaults_to_mock_order(monkeypatch, tmp_pat
     assert shipment["request"]["patient"]["patient"]["phone"] == "5551234567"
     assert shipment["request"]["patient"]["patient"]["dateOfBirth"] == "1990-01-01"
     assert shipment["request"]["order"]["order"]["payment_status"] == "paid"
+    assert shipment["request"]["order"]["order"]["amount"] == "199.00"
+    assert shipment["request"]["product"]["clientProductId"] == "mock_client_product_order"
     assert shipment["response"]["order"]["data"]["orderStatus"] == "pending_review"
     assert shipment["response"]["order"]["data"]["requiredActions"] == []
 
@@ -160,7 +179,6 @@ def test_patient_medication_shipment_defaults_to_mock_order(monkeypatch, tmp_pat
 def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ARORA_API_MODE", "live")
     monkeypatch.setenv("ARORA_API_KEY", "test-arora-key")
-    monkeypatch.setenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID", "clientA_network1_prodX")
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]
     patient_token, patient_id = _create_patient_session(client, suffix)
@@ -199,6 +217,7 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
                 "state": "TX",
                 "zip": "78701",
             },
+            "client_product_id": "mock_client_product_order",
             "amount": "199.00",
         },
     )
@@ -239,7 +258,7 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
             "payload": {
                 "patient_id": "arora_patient_123",
                 "order": {
-                    "clientProductId": "clientA_network1_prodX",
+                    "clientProductId": "mock_client_product_order",
                     "payment_status": "paid",
                     "amount": "199.00",
                 },
@@ -252,7 +271,6 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
 def test_admin_can_list_and_advance_patient_orders(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("ARORA_API_MODE", raising=False)
     monkeypatch.delenv("ARORA_API_KEY", raising=False)
-    monkeypatch.delenv("ARORA_DEFAULT_CLIENT_PRODUCT_ID", raising=False)
     monkeypatch.delenv("ARORA_DRY_RUN", raising=False)
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]
@@ -261,7 +279,7 @@ def test_admin_can_list_and_advance_patient_orders(monkeypatch, tmp_path) -> Non
     created = client.post(
         "/patients/medication-shipments",
         headers={"Authorization": f"Bearer {patient_token}"},
-        json={},
+        json={"client_product_id": "mock_client_product_order"},
     )
     assert created.status_code == 200
     shipment_id = created.json()["medicationShipment"]["id"]
