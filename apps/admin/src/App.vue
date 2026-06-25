@@ -190,11 +190,11 @@ async function loadProducts() {
     const body = await api<{ mode: string; products: AroraProduct[] }>('/admin/arora/products');
     products.value = body.products;
     apiStatus.value = 'online';
-    apiMessage.value = `Backend API returned ${body.mode} Arora products.`;
+    apiMessage.value = 'Backend API returned the product catalog.';
   } catch (err) {
     apiStatus.value = 'offline';
     apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
-    error.value = 'Unable to load mock Arora products.';
+    error.value = 'Unable to load products.';
   } finally {
     productLoading.value = false;
   }
@@ -276,7 +276,7 @@ async function saveProduct() {
         product.clientProductId === body.product.clientProductId ? body.product : product
       ))
       : [...products.value, body.product].sort((a, b) => a.displayName.localeCompare(b.displayName));
-    notice.value = `${body.product.displayName} saved to the ${body.mode} Arora catalog.`;
+    notice.value = `${body.product.displayName} saved.`;
     resetProductForm();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to save product.';
@@ -295,7 +295,7 @@ async function deleteProduct(product: AroraProduct) {
     });
     products.value = products.value.filter((item) => item.clientProductId !== product.clientProductId);
     if (editingProductId.value === product.clientProductId) resetProductForm();
-    notice.value = `${product.displayName} removed from the mock Arora catalog.`;
+    notice.value = `${product.displayName} removed.`;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to delete product.';
   } finally {
@@ -378,13 +378,13 @@ onMounted(async () => {
           <div>
             <div class="label mb-3">Manual testing</div>
             <h1 class="serif text-h3 mb-2">
-              {{ currentView === 'orders' ? 'Order and prescription queue' : 'Mock Arora products' }}
+              {{ currentView === 'orders' ? 'Order and prescription queue' : 'Products and packages' }}
             </h1>
             <div class="text-medium-emphasis">
               {{
                 currentView === 'orders'
-                  ? 'Orders placed in a local partner Nexus app appear here for Arora stage simulation.'
-                  : 'Create and edit local catalog records using the same clientProductId vocabulary Arora returns.'
+                  ? 'Orders placed through partner Nexus sites appear here for stage review.'
+                  : 'Create and edit products and packages available through the catalog.'
               }}
             </div>
           </div>
@@ -440,7 +440,7 @@ onMounted(async () => {
             <div class="stat">
               <div class="label mb-2">Delivered</div>
               <div class="serif text-h4">{{ completedOrders.length }}</div>
-              <div class="text-caption text-medium-emphasis mt-1">Completed simulations.</div>
+              <div class="text-caption text-medium-emphasis mt-1">Completed orders.</div>
             </div>
           </v-col>
           <v-col cols="12" md="4">
@@ -456,7 +456,7 @@ onMounted(async () => {
           <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
             <div>
               <h2 class="text-h6 mb-0">Medication shipments</h2>
-              <div class="text-body-2 text-medium-emphasis">Advance a row to simulate the next Arora API state.</div>
+              <div class="text-body-2 text-medium-emphasis">Advance a row through the available order stages.</div>
             </div>
             <v-spacer />
             <v-select
@@ -529,14 +529,14 @@ onMounted(async () => {
               <div class="stat">
                 <div class="label mb-2">Catalog records</div>
                 <div class="serif text-h4">{{ products.length }}</div>
-                <div class="text-caption text-medium-emphasis mt-1">Mock Arora product rows.</div>
+                <div class="text-caption text-medium-emphasis mt-1">Products and packages.</div>
               </div>
             </v-col>
             <v-col cols="12" md="4">
               <div class="stat">
                 <div class="label mb-2">Active</div>
                 <div class="serif text-h4">{{ activeProducts.length }}</div>
-                <div class="text-caption text-medium-emphasis mt-1">Visible in simulated catalog calls.</div>
+                <div class="text-caption text-medium-emphasis mt-1">Available in the catalog.</div>
               </div>
             </v-col>
             <v-col cols="12" md="4">
@@ -555,7 +555,7 @@ onMounted(async () => {
                   <v-icon color="primary" icon="mdi-database-edit" />
                   <div>
                     <h2 class="text-h6 mb-0">{{ editingProductId ? 'Edit product' : 'Create product' }}</h2>
-                    <div class="text-body-2 text-medium-emphasis">Writes to the mock Arora catalog.</div>
+                    <div class="text-body-2 text-medium-emphasis">Manage catalog availability and patient-facing copy.</div>
                   </div>
                 </div>
 
@@ -632,11 +632,9 @@ onMounted(async () => {
               <v-card class="panel pa-5">
                 <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
                   <div>
-                    <h2 class="text-h6 mb-0">Mock catalog</h2>
-                    <div class="text-body-2 text-medium-emphasis">These rows stand in for Arora List consult/lab product responses.</div>
+                    <h2 class="text-h6 mb-0">Product catalog</h2>
+                    <div class="text-body-2 text-medium-emphasis">Products and packages available for patient ordering.</div>
                   </div>
-                  <v-spacer />
-                  <v-chip color="primary" variant="tonal">Mock API</v-chip>
                 </div>
 
                 <div class="product-list">
@@ -685,7 +683,7 @@ onMounted(async () => {
                     v-if="products.length === 0"
                     icon="mdi-package-variant"
                     title="No products yet"
-                    text="Create the first mock Arora product from the form."
+                    text="Create the first product or package from the form."
                   />
                 </div>
               </v-card>
