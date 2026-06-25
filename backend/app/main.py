@@ -16,6 +16,15 @@ from typing import Any, Literal
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from app.arora_client import (
+    AroraClientError,
+    AroraConflictError,
+    AroraNotFoundError,
+    AroraValidationError,
+    MockAroraClient,
+    seed_mock_products,
+)
+
 
 PASSWORD_ITERATIONS = 390_000
 PrincipalKind = Literal["partner", "patient"]
@@ -201,10 +210,28 @@ def _initialize_database(database_path: str | Path) -> None:
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS arora_mock_products (
+                client_product_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                customer_price REAL NOT NULL DEFAULT 0,
+                item_type TEXT,
+                included_products TEXT NOT NULL DEFAULT '[]',
+                description TEXT NOT NULL DEFAULT '',
+                display_description TEXT NOT NULL DEFAULT '',
+                show_patient INTEGER NOT NULL DEFAULT 1,
+                display_category_ids TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         _ensure_partner_domain_cloudflare_columns(db)
         _ensure_medication_shipment_columns(db)
+        _ensure_arora_mock_product_columns(db)
+        seed_mock_products(db)
 
 
 def _ensure_partner_domain_cloudflare_columns(db: sqlite3.Connection) -> None:
@@ -231,6 +258,50 @@ def _ensure_medication_shipment_columns(db: sqlite3.Connection) -> None:
         db.execute("UPDATE medication_shipments SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP)")
 
 
+def _ensure_arora_mock_product_columns(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(arora_mock_products)").fetchall()}
+    migrations = {
+        "customer_price": "ALTER TABLE arora_mock_products ADD COLUMN customer_price REAL NOT NULL DEFAULT 0",
+        "item_type": "ALTER TABLE arora_mock_products ADD COLUMN item_type TEXT",
+        "included_products": "ALTER TABLE arora_mock_products ADD COLUMN included_products TEXT NOT NULL DEFAULT '[]'",
+        "display_description": "ALTER TABLE arora_mock_products ADD COLUMN display_description TEXT NOT NULL DEFAULT ''",
+        "show_patient": "ALTER TABLE arora_mock_products ADD COLUMN show_patient INTEGER NOT NULL DEFAULT 1",
+        "display_category_ids": "ALTER TABLE arora_mock_products ADD COLUMN display_category_ids TEXT NOT NULL DEFAULT '[]'",
+    }
+    for column, statement in migrations.items():
+        if column not in columns:
+            db.execute(statement)
+    refreshed_columns = {row["name"] for row in db.execute("PRAGMA table_info(arora_mock_products)").fetchall()}
+    if "price_cents" in refreshed_columns:
+        db.execute(
+            """
+            UPDATE arora_mock_products
+            SET customer_price = ROUND(COALESCE(price_cents, 0) / 100.0, 2)
+            WHERE customer_price = 0 AND price_cents IS NOT NULL
+            """
+        )
+    if "category" in refreshed_columns:
+        rows = db.execute(
+            """
+            SELECT client_product_id, category
+            FROM arora_mock_products
+            WHERE display_category_ids = '[]' AND COALESCE(category, '') != ''
+            """
+        ).fetchall()
+        for row in rows:
+            db.execute(
+                "UPDATE arora_mock_products SET display_category_ids = ? WHERE client_product_id = ?",
+                (json.dumps([row["category"]]), row["client_product_id"]),
+            )
+    db.execute(
+        """
+        UPDATE arora_mock_products
+        SET display_description = description
+        WHERE display_description = '' AND COALESCE(description, '') != ''
+        """
+    )
+
+
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
@@ -250,6 +321,16 @@ def _required(value: str, label: str) -> str:
     if not cleaned:
         raise HTTPException(status_code=422, detail=f"{label} is required")
     return cleaned
+
+
+def _raise_arora_http_error(error: AroraClientError) -> None:
+    if isinstance(error, AroraValidationError):
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if isinstance(error, AroraConflictError):
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if isinstance(error, AroraNotFoundError):
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    raise HTTPException(status_code=500, detail=str(error)) from error
 
 
 def _public_partner(partner: sqlite3.Row) -> dict[str, str | None]:
@@ -1666,6 +1747,58 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     @app.get("/admin/order-stages", tags=["admin"])
     def admin_order_stages() -> dict[str, object]:
         return {"stages": list(ARORA_ORDER_STAGES)}
+
+    @app.get("/admin/arora/products", tags=["admin"])
+    def admin_arora_products(
+        item_type: str | None = None,
+        include_inactive: bool = True,
+    ) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            arora_client = MockAroraClient(db)
+            try:
+                return {
+                    "mode": arora_client.mode,
+                    "products": arora_client.list_products(item_type, include_inactive),
+                }
+            except AroraClientError as error:
+                _raise_arora_http_error(error)
+
+    @app.post("/admin/arora/products", tags=["admin"])
+    def admin_arora_product_create(payload: dict[str, Any]) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            arora_client = MockAroraClient(db)
+            try:
+                return {
+                    "mode": arora_client.mode,
+                    "product": arora_client.create_product(payload),
+                }
+            except AroraClientError as error:
+                _raise_arora_http_error(error)
+
+    @app.patch("/admin/arora/products/{client_product_id}", tags=["admin"])
+    def admin_arora_product_update(
+        client_product_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            arora_client = MockAroraClient(db)
+            try:
+                return {
+                    "mode": arora_client.mode,
+                    "product": arora_client.update_product(client_product_id, payload),
+                }
+            except AroraClientError as error:
+                _raise_arora_http_error(error)
+
+    @app.delete("/admin/arora/products/{client_product_id}", tags=["admin"])
+    def admin_arora_product_delete(client_product_id: str) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            arora_client = MockAroraClient(db)
+            try:
+                deleted_product = arora_client.delete_product(client_product_id)
+                return {"mode": arora_client.mode, **deleted_product}
+            except AroraClientError as error:
+                _raise_arora_http_error(error)
 
     @app.get("/admin/medication-shipments", tags=["admin"])
     def admin_medication_shipments() -> dict[str, object]:

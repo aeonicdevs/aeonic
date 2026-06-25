@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
@@ -30,6 +30,22 @@ type MedicationShipment = {
   createdAt: string;
 };
 
+type AroraProduct = {
+  clientProductId: string;
+  name: string;
+  displayName: string;
+  customerPrice: number;
+  itemType: 'package' | null;
+  includedProducts: { clientProductId: string }[];
+  description: string;
+  displayDescription: string;
+  displayCategoryIds?: string[];
+  showPatient: boolean;
+  status: 'active' | 'inactive';
+  updatedAt: string;
+  createdAt: string;
+};
+
 const fallbackStages: OrderStage[] = [
   {
     value: 'pending_review',
@@ -51,15 +67,42 @@ const stageVisuals: Record<string, { icon: string; color: string }> = {
 
 const apiStatus = ref<ApiStatus>('checking');
 const apiMessage = ref('Checking API connection');
+const currentView = ref<'orders' | 'products'>('orders');
 const orders = ref<MedicationShipment[]>([]);
+const products = ref<AroraProduct[]>([]);
 const stages = ref<OrderStage[]>(fallbackStages);
 const selectedStage = ref('all');
 const notice = ref('');
 const error = ref('');
 const loading = ref(false);
+const productLoading = ref(false);
 const updatingOrderId = ref('');
+const savingProduct = ref(false);
+const editingProductId = ref('');
+
+const productDraft = reactive({
+  item_kind: 'product',
+  name: '',
+  displayName: '',
+  customerPrice: 199,
+  showPatient: true,
+  description: '',
+  displayDescription: '',
+  includedProductIds: [] as string[],
+  status: 'active',
+});
 
 const stageItems = computed(() => stages.value.map((stage) => ({ title: stage.label, value: stage.value })));
+const productStatusItems = [
+  { title: 'Active', value: 'active' },
+  { title: 'Inactive', value: 'inactive' },
+];
+const availablePackageProductItems = computed(() => products.value
+  .filter((product) => product.status === 'active' && product.itemType !== 'package')
+  .map((product) => ({
+    title: `${product.displayName} (${product.clientProductId})`,
+    value: product.clientProductId,
+  })));
 
 const filteredOrders = computed(() => {
   if (selectedStage.value === 'all') return orders.value;
@@ -74,6 +117,8 @@ const exceptionOrders = computed(() => orders.value.filter((order) => (
   || order.status === 'canceled'
   || order.status === 'prescription_rejected'
 )));
+const activeProducts = computed(() => products.value.filter((product) => product.status === 'active'));
+const inactiveProducts = computed(() => products.value.filter((product) => product.status === 'inactive'));
 
 const statusCopy = computed(() => {
   if (apiStatus.value === 'online') {
@@ -93,6 +138,12 @@ function stageFor(value: string) {
   };
   const visual = stageVisuals[value] ?? { icon: 'mdi-progress-question', color: 'default' };
   return { ...metadata, ...visual };
+}
+
+function nextStageFor(value: string) {
+  const currentIndex = stages.value.findIndex((stage) => stage.value === value);
+  if (currentIndex < 0) return stages.value[0] ?? null;
+  return stages.value[currentIndex + 1] ?? null;
 }
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -132,6 +183,23 @@ async function loadOrders() {
   }
 }
 
+async function loadProducts() {
+  productLoading.value = true;
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; products: AroraProduct[] }>('/admin/arora/products');
+    products.value = body.products;
+    apiStatus.value = 'online';
+    apiMessage.value = `Backend API returned ${body.mode} Arora products.`;
+  } catch (err) {
+    apiStatus.value = 'offline';
+    apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
+    error.value = 'Unable to load mock Arora products.';
+  } finally {
+    productLoading.value = false;
+  }
+}
+
 async function checkApi() {
   apiStatus.value = 'checking';
   apiMessage.value = `Checking ${API_BASE}/health`;
@@ -144,6 +212,94 @@ async function checkApi() {
   } catch (err) {
     apiStatus.value = 'offline';
     apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
+  }
+}
+
+function resetProductForm() {
+  editingProductId.value = '';
+  Object.assign(productDraft, {
+    item_kind: 'product',
+    name: '',
+    displayName: '',
+    customerPrice: 199,
+    showPatient: true,
+    description: '',
+    displayDescription: '',
+    includedProductIds: [],
+    status: 'active',
+  });
+}
+
+function editProduct(product: AroraProduct) {
+  editingProductId.value = product.clientProductId;
+  Object.assign(productDraft, {
+    item_kind: product.itemType === 'package' ? 'package' : 'product',
+    name: product.name,
+    displayName: product.displayName,
+    customerPrice: product.customerPrice,
+    showPatient: product.showPatient,
+    description: product.description,
+    displayDescription: product.displayDescription,
+    includedProductIds: product.includedProducts.map((includedProduct) => includedProduct.clientProductId),
+    status: product.status,
+  });
+}
+
+async function saveProduct() {
+  savingProduct.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const payload = {
+      name: productDraft.name.trim(),
+      displayName: productDraft.displayName.trim() || undefined,
+      customerPrice: Number.isFinite(Number(productDraft.customerPrice)) ? Number(productDraft.customerPrice) : undefined,
+      itemType: productDraft.item_kind === 'package' ? 'package' : undefined,
+      includedProducts: productDraft.item_kind === 'package'
+        ? productDraft.includedProductIds.map((clientProductId) => ({ clientProductId }))
+        : undefined,
+      description: productDraft.description.trim() || undefined,
+      displayDescription: productDraft.displayDescription.trim() || undefined,
+      showPatient: productDraft.showPatient,
+      status: productDraft.status,
+    };
+    const path = editingProductId.value
+      ? `/admin/arora/products/${encodeURIComponent(editingProductId.value)}`
+      : '/admin/arora/products';
+    const method = editingProductId.value ? 'PATCH' : 'POST';
+    const body = await api<{ mode: string; product: AroraProduct }>(path, {
+      method,
+      body: JSON.stringify(payload),
+    });
+    products.value = editingProductId.value
+      ? products.value.map((product) => (
+        product.clientProductId === body.product.clientProductId ? body.product : product
+      ))
+      : [...products.value, body.product].sort((a, b) => a.displayName.localeCompare(b.displayName));
+    notice.value = `${body.product.displayName} saved to the ${body.mode} Arora catalog.`;
+    resetProductForm();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to save product.';
+  } finally {
+    savingProduct.value = false;
+  }
+}
+
+async function deleteProduct(product: AroraProduct) {
+  savingProduct.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    await api<{ deleted: boolean }>(`/admin/arora/products/${encodeURIComponent(product.clientProductId)}`, {
+      method: 'DELETE',
+    });
+    products.value = products.value.filter((item) => item.clientProductId !== product.clientProductId);
+    if (editingProductId.value === product.clientProductId) resetProductForm();
+    notice.value = `${product.displayName} removed from the mock Arora catalog.`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to delete product.';
+  } finally {
+    savingProduct.value = false;
   }
 }
 
@@ -172,6 +328,14 @@ async function moveOrderTo(order: MedicationShipment, status: unknown) {
   }
 }
 
+function formatCurrency(value: number | null) {
+  if (value === null) return 'No price';
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+  }).format(value);
+}
+
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -184,6 +348,7 @@ function formatTimestamp(value: string) {
 onMounted(async () => {
   await checkApi();
   await loadOrders();
+  await loadProducts();
 });
 </script>
 
@@ -212,16 +377,44 @@ onMounted(async () => {
         <div class="d-flex flex-column flex-md-row align-md-end ga-4 mb-6">
           <div>
             <div class="label mb-3">Manual testing</div>
-            <h1 class="serif text-h3 mb-2">Order and prescription queue</h1>
+            <h1 class="serif text-h3 mb-2">
+              {{ currentView === 'orders' ? 'Order and prescription queue' : 'Mock Arora products' }}
+            </h1>
             <div class="text-medium-emphasis">
-              Orders placed in a local partner Nexus app appear here for Arora stage simulation.
+              {{
+                currentView === 'orders'
+                  ? 'Orders placed in a local partner Nexus app appear here for Arora stage simulation.'
+                  : 'Create and edit local catalog records using the same clientProductId vocabulary Arora returns.'
+              }}
             </div>
           </div>
           <v-spacer />
-          <v-btn color="primary" prepend-icon="mdi-refresh" :loading="loading" variant="flat" @click="loadOrders">
+          <v-btn
+            v-if="currentView === 'orders'"
+            color="primary"
+            prepend-icon="mdi-refresh"
+            :loading="loading"
+            variant="flat"
+            @click="loadOrders"
+          >
             Refresh queue
           </v-btn>
+          <v-btn
+            v-else
+            color="primary"
+            prepend-icon="mdi-refresh"
+            :loading="productLoading"
+            variant="flat"
+            @click="loadProducts"
+          >
+            Refresh products
+          </v-btn>
         </div>
+
+        <v-btn-toggle v-model="currentView" mandatory class="mb-5" color="primary" density="comfortable">
+          <v-btn value="orders" prepend-icon="mdi-clipboard-pulse">Orders</v-btn>
+          <v-btn value="products" prepend-icon="mdi-pill">Products</v-btn>
+        </v-btn-toggle>
 
         <v-alert class="mb-5" :color="statusCopy.color" :icon="statusCopy.icon" variant="tonal">
           <strong>{{ API_BASE }}</strong> - {{ apiMessage }}
@@ -234,6 +427,7 @@ onMounted(async () => {
           {{ error }}
         </v-alert>
 
+        <template v-if="currentView === 'orders'">
         <v-row class="mb-5">
           <v-col cols="12" md="4">
             <div class="stat">
@@ -305,6 +499,17 @@ onMounted(async () => {
                   :model-value="order.status"
                   @update:model-value="moveOrderTo(order, $event)"
                 />
+                <v-btn
+                  block
+                  class="mt-3"
+                  color="primary"
+                  :disabled="!nextStageFor(order.status)"
+                  prepend-icon="mdi-debug-step-over"
+                  :loading="updatingOrderId === order.id"
+                  @click="moveOrderTo(order, nextStageFor(order.status)?.value)"
+                >
+                  Advance to next stage
+                </v-btn>
               </div>
             </div>
 
@@ -316,6 +521,177 @@ onMounted(async () => {
             />
           </div>
         </v-card>
+        </template>
+
+        <template v-else>
+          <v-row class="mb-5">
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Catalog records</div>
+                <div class="serif text-h4">{{ products.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Mock Arora product rows.</div>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Active</div>
+                <div class="serif text-h4">{{ activeProducts.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Visible in simulated catalog calls.</div>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Inactive</div>
+                <div class="serif text-h4">{{ inactiveProducts.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Retained but hidden from active lists.</div>
+              </div>
+            </v-col>
+          </v-row>
+
+          <v-row align="start">
+            <v-col cols="12" lg="4">
+              <v-card class="panel pa-5">
+                <div class="d-flex align-center ga-3 mb-5">
+                  <v-icon color="primary" icon="mdi-database-edit" />
+                  <div>
+                    <h2 class="text-h6 mb-0">{{ editingProductId ? 'Edit product' : 'Create product' }}</h2>
+                    <div class="text-body-2 text-medium-emphasis">Writes to the mock Arora catalog.</div>
+                  </div>
+                </div>
+
+                <v-form @submit.prevent="saveProduct">
+                  <v-btn-toggle
+                    v-model="productDraft.item_kind"
+                    class="mb-4"
+                    color="primary"
+                    density="comfortable"
+                    divided
+                    mandatory
+                  >
+                    <v-btn value="product" prepend-icon="mdi-pill">Product</v-btn>
+                    <v-btn value="package" prepend-icon="mdi-package-variant">Package</v-btn>
+                  </v-btn-toggle>
+                  <v-text-field v-model="productDraft.name" label="Internal name" />
+                  <v-text-field v-model="productDraft.displayName" label="Patient-facing name" />
+                  <v-row>
+                    <v-col cols="12" sm="6">
+                      <v-text-field
+                        v-model.number="productDraft.customerPrice"
+                        label="Customer price"
+                        min="0"
+                        prefix="$"
+                        step="0.01"
+                        type="number"
+                      />
+                    </v-col>
+                    <v-col cols="12" sm="6">
+                      <v-select v-model="productDraft.status" :items="productStatusItems" label="Status" />
+                    </v-col>
+                  </v-row>
+                  <v-switch
+                    v-model="productDraft.showPatient"
+                    color="primary"
+                    hide-details
+                    inset
+                    label="Show to patients"
+                  />
+                  <v-select
+                    v-if="productDraft.item_kind === 'package'"
+                    v-model="productDraft.includedProductIds"
+                    :items="availablePackageProductItems"
+                    chips
+                    closable-chips
+                    label="Included products"
+                    multiple
+                  />
+                  <v-textarea
+                    v-model="productDraft.description"
+                    auto-grow
+                    label="Internal description"
+                    rows="3"
+                    variant="outlined"
+                  />
+                  <v-textarea
+                    v-model="productDraft.displayDescription"
+                    auto-grow
+                    label="Patient-facing description"
+                    rows="3"
+                    variant="outlined"
+                  />
+                  <div class="d-flex ga-3">
+                    <v-btn color="primary" :loading="savingProduct" prepend-icon="mdi-content-save" type="submit">
+                      {{ editingProductId ? 'Save changes' : 'Create product' }}
+                    </v-btn>
+                    <v-btn variant="text" @click="resetProductForm">Clear</v-btn>
+                  </div>
+                </v-form>
+              </v-card>
+            </v-col>
+
+            <v-col cols="12" lg="8">
+              <v-card class="panel pa-5">
+                <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
+                  <div>
+                    <h2 class="text-h6 mb-0">Mock catalog</h2>
+                    <div class="text-body-2 text-medium-emphasis">These rows stand in for Arora List consult/lab product responses.</div>
+                  </div>
+                  <v-spacer />
+                  <v-chip color="primary" variant="tonal">Mock API</v-chip>
+                </div>
+
+                <div class="product-list">
+                  <div v-for="product in products" :key="product.clientProductId" class="product-row">
+                    <div class="product-main">
+                      <div class="d-flex align-center ga-2 mb-2">
+                        <strong>{{ product.displayName }}</strong>
+                        <v-chip :color="product.status === 'active' ? 'success' : 'default'" size="small" variant="tonal">
+                          {{ product.status }}
+                        </v-chip>
+                        <v-chip size="small" variant="tonal">{{ product.itemType === 'package' ? 'package' : 'product' }}</v-chip>
+                        <v-chip :color="product.showPatient ? 'primary' : 'default'" size="small" variant="tonal">
+                          {{ product.showPatient ? 'patient visible' : 'hidden' }}
+                        </v-chip>
+                      </div>
+                      <div class="text-body-2 text-medium-emphasis">
+                        {{ product.displayDescription || product.description || 'No description' }}
+                      </div>
+                      <div class="order-meta mt-3">
+                        <v-chip size="small" variant="tonal">{{ product.clientProductId }}</v-chip>
+                        <span>{{ formatCurrency(product.customerPrice) }}</span>
+                        <span v-if="product.itemType === 'package'">
+                          {{ product.includedProducts.length }} included
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="product-actions">
+                      <v-btn block prepend-icon="mdi-pencil" variant="tonal" @click="editProduct(product)">
+                        Edit
+                      </v-btn>
+                      <v-btn
+                        block
+                        class="mt-3"
+                        color="error"
+                        prepend-icon="mdi-delete"
+                        variant="text"
+                        @click="deleteProduct(product)"
+                      >
+                        Delete
+                      </v-btn>
+                    </div>
+                  </div>
+
+                  <v-empty-state
+                    v-if="products.length === 0"
+                    icon="mdi-package-variant"
+                    title="No products yet"
+                    text="Create the first mock Arora product from the form."
+                  />
+                </div>
+              </v-card>
+            </v-col>
+          </v-row>
+        </template>
       </v-container>
     </v-main>
   </v-app>

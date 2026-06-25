@@ -299,6 +299,100 @@ def test_admin_can_list_and_advance_patient_orders(monkeypatch, tmp_path) -> Non
     assert invalid.status_code == 422
 
 
+def test_admin_can_manage_mock_arora_products(tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+
+    initial = client.get("/admin/arora/products")
+    assert initial.status_code == 200
+    assert initial.json()["mode"] == "mock"
+    assert any(
+        product["clientProductId"] == "mock_client_product_order"
+        for product in initial.json()["products"]
+    )
+
+    created = client.post(
+        "/admin/arora/products",
+        json={
+            "name": "Longevity Consult",
+            "displayName": "Longevity Consult",
+            "customerPrice": 249.0,
+            "status": "active",
+            "showPatient": True,
+            "displayCategoryIds": ["longevity"],
+            "description": "Internal mock consult product",
+            "displayDescription": "Patient-facing longevity consult",
+        },
+    )
+    assert created.status_code == 200
+    product = created.json()["product"]
+    assert product["clientProductId"] == "mock_product_longevity_consult"
+    assert product["itemType"] is None
+    assert product["customerPrice"] == 249.0
+    assert product["showPatient"] is True
+    assert product["displayCategoryIds"] == ["longevity"]
+
+    invalid_package = client.post(
+        "/admin/arora/products",
+        json={
+            "name": "Too Small Package",
+            "customerPrice": 299.0,
+            "itemType": "package",
+            "includedProducts": [{"clientProductId": "mock_client_product_order"}],
+        },
+    )
+    assert invalid_package.status_code == 422
+
+    package = client.post(
+        "/admin/arora/products",
+        json={
+            "name": "Longevity Starter Package",
+            "displayName": "Longevity Starter Package",
+            "customerPrice": 349.0,
+            "itemType": "package",
+            "includedProducts": [
+                {"clientProductId": "mock_client_product_order"},
+                {"clientProductId": "mock_lab_foundation_panel"},
+            ],
+            "status": "active",
+            "showPatient": False,
+            "displayCategoryIds": ["longevity", "labs"],
+            "description": "Internal mock package",
+            "displayDescription": "Patient-facing package",
+        },
+    )
+    assert package.status_code == 200
+    assert package.json()["product"]["itemType"] == "package"
+    assert len(package.json()["product"]["includedProducts"]) == 2
+    assert package.json()["product"]["showPatient"] is False
+
+    updated = client.patch(
+        "/admin/arora/products/mock_product_longevity_consult",
+        json={
+            "displayName": "Longevity Program",
+            "status": "inactive",
+            "customerPrice": 299.0,
+            "showPatient": False,
+            "displayDescription": "Updated patient-facing copy",
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["product"]["displayName"] == "Longevity Program"
+    assert updated.json()["product"]["status"] == "inactive"
+    assert updated.json()["product"]["customerPrice"] == 299.0
+    assert updated.json()["product"]["showPatient"] is False
+
+    active_products = client.get("/admin/arora/products", params={"include_inactive": False})
+    assert active_products.status_code == 200
+    assert all(product["status"] == "active" for product in active_products.json()["products"])
+
+    deleted = client.delete("/admin/arora/products/mock_product_longevity_consult")
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+
+    missing = client.patch("/admin/arora/products/mock_product_longevity_consult", json={"name": "Gone"})
+    assert missing.status_code == 404
+
+
 def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]

@@ -110,6 +110,19 @@ To test the patient-to-admin order loop locally:
 4. Open Admin at `http://127.0.0.1:5175`, refresh the queue, and advance the order through the Arora stage menu.
 5. Back in Nexus, use Refresh status to see the latest simulated stage.
 
+Admin also includes a mock Arora product catalog. Use the Products tab at
+`http://127.0.0.1:5175` to create, edit, deactivate, or delete local products
+and packages using the Arora-shaped fields: `name`, `displayName`,
+`customerPrice`, optional `itemType: "package"`, `includedProducts`,
+`status`, `showPatient`, `description`, and `displayDescription`.
+The backend mock also preserves `displayCategoryIds` for API compatibility,
+but the admin UI does not currently expose it while the category model is
+unclear. Those records are served through backend
+`/admin/arora/products` endpoints so the admin UI can keep the same
+Aeonic-facing contract. The endpoints delegate to the Arora client adapter in
+`backend/app/arora_client.py`, which currently uses the mock SQLite store and
+can later be swapped to a real Arora HTTP implementation.
+
 For Cloudflare Tunnel testing, keep saving the real or simulated patient-facing domain in the Partner app, for example `app.viper.guru`. Do not save the local tunnel hostname as partner data. Instead, set `AEONIC_DEV_DOMAIN_ALIASES` so the API treats your local tunnel hostname as an alias for that patient domain.
 
 In development, the API allows localhost origins on any port so Vite can auto-select a free port without breaking API calls.

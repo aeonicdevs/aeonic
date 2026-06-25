@@ -68,12 +68,14 @@ body {
   width: min(100%, 220px);
 }
 
-.order-list {
+.order-list,
+.product-list {
   display: grid;
   gap: 12px;
 }
 
-.order-row {
+.order-row,
+.product-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
   gap: 16px;
@@ -84,7 +86,8 @@ body {
   padding: 16px;
 }
 
-.order-main {
+.order-main,
+.product-main {
   min-width: 0;
 }
 
@@ -97,12 +100,14 @@ body {
   font-size: 0.85rem;
 }
 
-.order-actions {
+.order-actions,
+.product-actions {
   min-width: 0;
 }
 
 @media (max-width: 760px) {
-  .order-row {
+  .order-row,
+  .product-row {
     grid-template-columns: 1fr;
   }
 
