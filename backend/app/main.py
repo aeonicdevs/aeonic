@@ -90,6 +90,20 @@ class AdminMedicationShipmentStatusUpdate(BaseModel):
     status: str = Field(min_length=1)
 
 
+class AdminMockConversationCreate(BaseModel):
+    patient_id: str = Field(min_length=1)
+    subject: str = Field(default="Care team", min_length=1)
+    text: str = Field(min_length=1)
+    author: Literal["client", "patient"] = "client"
+    sender_name: str = Field(default="Care Team", min_length=1)
+
+
+class AdminMockConversationMessageCreate(BaseModel):
+    author: Literal["client", "patient"] = "client"
+    sender_name: str = Field(default="Care Team", min_length=1)
+    text: str = Field(min_length=1)
+
+
 ARORA_ORDER_STAGES: tuple[dict[str, str], ...] = (
     {
         "value": "pending_review",
@@ -225,6 +239,25 @@ def _initialize_database(database_path: str | Path) -> None:
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS arora_mock_conversations (
+                id TEXT PRIMARY KEY,
+                partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+                patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                status TEXT NOT NULL DEFAULT 'active',
+                subject TEXT NOT NULL DEFAULT 'Care team',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS arora_mock_conversation_messages (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL REFERENCES arora_mock_conversations(id) ON DELETE CASCADE,
+                author TEXT NOT NULL CHECK (author IN ('client', 'patient')),
+                sender_name TEXT NOT NULL,
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
@@ -561,6 +594,75 @@ def _public_admin_medication_shipment(shipment: sqlite3.Row) -> dict[str, Any]:
         }
     )
     return public_shipment
+
+
+def _public_mock_conversation(conversation: sqlite3.Row, *, include_admin: bool = False) -> dict[str, Any]:
+    public_conversation: dict[str, Any] = {
+        "conversationId": conversation["id"],
+        "patientId": conversation["patient_id"],
+        "status": conversation["status"],
+        "subject": conversation["subject"],
+        "messageCount": conversation["message_count"],
+        "lastMessageText": conversation["last_message_text"],
+        "lastMessageAt": conversation["last_message_at"],
+        "createdAt": conversation["created_at"],
+        "updatedAt": conversation["updated_at"],
+    }
+    if include_admin:
+        public_conversation.update(
+            {
+                "partnerId": conversation["partner_id"],
+                "partnerName": conversation["partner_name"],
+                "patientName": conversation["patient_name"],
+                "patientEmail": conversation["patient_email"],
+            }
+        )
+    return public_conversation
+
+
+def _public_mock_conversation_message(message: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "messageId": message["id"],
+        "conversationId": message["conversation_id"],
+        "author": message["author"],
+        "senderName": message["sender_name"],
+        "text": message["text"],
+        "createdAt": message["created_at"],
+    }
+
+
+def _mock_conversation_list_query(where_clause: str = "") -> str:
+    return f"""
+        SELECT
+            conversations.*,
+            patients.name AS patient_name,
+            patients.email AS patient_email,
+            partners.clinic_name AS partner_name,
+            (
+                SELECT COUNT(*)
+                FROM arora_mock_conversation_messages messages
+                WHERE messages.conversation_id = conversations.id
+            ) AS message_count,
+            (
+                SELECT messages.text
+                FROM arora_mock_conversation_messages messages
+                WHERE messages.conversation_id = conversations.id
+                ORDER BY messages.created_at DESC
+                LIMIT 1
+            ) AS last_message_text,
+            (
+                SELECT messages.created_at
+                FROM arora_mock_conversation_messages messages
+                WHERE messages.conversation_id = conversations.id
+                ORDER BY messages.created_at DESC
+                LIMIT 1
+            ) AS last_message_at
+        FROM arora_mock_conversations conversations
+        JOIN patients ON patients.id = conversations.patient_id
+        JOIN partners ON partners.id = conversations.partner_id
+        {where_clause}
+        ORDER BY conversations.updated_at DESC, conversations.created_at DESC
+    """
 
 
 def _arora_order_stage_values() -> set[str]:
@@ -1861,6 +1963,19 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             if patient is None:
                 raise HTTPException(status_code=401, detail="Invalid bearer token")
 
+            conversations = db.execute(
+                _mock_conversation_list_query("WHERE conversations.patient_id = ?"),
+                (patient_id,),
+            ).fetchall()
+            if conversations:
+                return {
+                    "mode": MockAroraClient.mode,
+                    "conversations": [
+                        _public_mock_conversation(conversation)
+                        for conversation in conversations
+                    ],
+                }
+
             created_at = patient["created_at"]
             return {
                 "mode": MockAroraClient.mode,
@@ -1870,7 +1985,9 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                         "patientId": patient_id,
                         "status": "active",
                         "subject": "Care team",
+                        "messageCount": 0,
                         "lastMessageText": "Conversation shell is ready for Arora message sync.",
+                        "lastMessageAt": created_at,
                         "createdAt": created_at,
                         "updatedAt": created_at,
                     }
@@ -2118,6 +2235,151 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 return {"mode": arora_client.mode, **deleted_product}
             except AroraClientError as error:
                 _raise_arora_http_error(error)
+
+    @app.get("/admin/mock/arora/conversations", tags=["admin"])
+    def admin_mock_arora_conversations() -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            conversations = db.execute(_mock_conversation_list_query()).fetchall()
+            return {
+                "mode": MockAroraClient.mode,
+                "conversations": [
+                    _public_mock_conversation(conversation, include_admin=True)
+                    for conversation in conversations
+                ],
+            }
+
+    @app.post("/admin/mock/arora/conversations", tags=["admin"])
+    def admin_mock_arora_conversation_create(payload: AdminMockConversationCreate) -> dict[str, object]:
+        patient_id = payload.patient_id.strip()
+        subject = payload.subject.strip() or "Care team"
+        text = payload.text.strip()
+        sender_name = payload.sender_name.strip() or ("Patient" if payload.author == "patient" else "Care Team")
+        if not text:
+            raise HTTPException(status_code=422, detail="Message text is required")
+
+        with _connect(resolved_database_path) as db:
+            patient = db.execute(
+                """
+                SELECT patients.*, partners.clinic_name AS partner_name
+                FROM patients
+                JOIN partners ON partners.id = patients.partner_id
+                WHERE patients.id = ?
+                """,
+                (patient_id,),
+            ).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=404, detail="Patient not found")
+
+            now = datetime.now(UTC).isoformat()
+            conversation_id = f"mock_conv_{uuid.uuid4().hex}"
+            message_id = f"mock_msg_{uuid.uuid4().hex}"
+            db.execute(
+                """
+                INSERT INTO arora_mock_conversations (
+                    id, partner_id, patient_id, status, subject, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'active', ?, ?, ?)
+                """,
+                (conversation_id, patient["partner_id"], patient["id"], subject, now, now),
+            )
+            db.execute(
+                """
+                INSERT INTO arora_mock_conversation_messages (
+                    id, conversation_id, author, sender_name, text, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (message_id, conversation_id, payload.author, sender_name, text, now),
+            )
+            conversation = db.execute(
+                _mock_conversation_list_query("WHERE conversations.id = ?"),
+                (conversation_id,),
+            ).fetchone()
+            if conversation is None:
+                raise HTTPException(status_code=500, detail="Unable to create mock conversation")
+
+            return {
+                "mode": MockAroraClient.mode,
+                "conversation": _public_mock_conversation(conversation, include_admin=True),
+            }
+
+    @app.get("/admin/mock/arora/conversations/{conversation_id}/messages", tags=["admin"])
+    def admin_mock_arora_conversation_messages(conversation_id: str) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            conversation = db.execute(
+                "SELECT id FROM arora_mock_conversations WHERE id = ?",
+                (conversation_id,),
+            ).fetchone()
+            if conversation is None:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+
+            messages = db.execute(
+                """
+                SELECT *
+                FROM arora_mock_conversation_messages
+                WHERE conversation_id = ?
+                ORDER BY created_at ASC
+                """,
+                (conversation_id,),
+            ).fetchall()
+            return {
+                "mode": MockAroraClient.mode,
+                "messages": [_public_mock_conversation_message(message) for message in messages],
+            }
+
+    @app.post("/admin/mock/arora/conversations/{conversation_id}/messages", tags=["admin"])
+    def admin_mock_arora_conversation_message_create(
+        conversation_id: str,
+        payload: AdminMockConversationMessageCreate,
+    ) -> dict[str, object]:
+        text = payload.text.strip()
+        sender_name = payload.sender_name.strip() or ("Patient" if payload.author == "patient" else "Care Team")
+        if not text:
+            raise HTTPException(status_code=422, detail="Message text is required")
+
+        with _connect(resolved_database_path) as db:
+            conversation = db.execute(
+                "SELECT id FROM arora_mock_conversations WHERE id = ?",
+                (conversation_id,),
+            ).fetchone()
+            if conversation is None:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+
+            now = datetime.now(UTC).isoformat()
+            message_id = f"mock_msg_{uuid.uuid4().hex}"
+            db.execute(
+                """
+                INSERT INTO arora_mock_conversation_messages (
+                    id, conversation_id, author, sender_name, text, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (message_id, conversation_id, payload.author, sender_name, text, now),
+            )
+            db.execute(
+                """
+                UPDATE arora_mock_conversations
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                (now, conversation_id),
+            )
+            message = db.execute(
+                "SELECT * FROM arora_mock_conversation_messages WHERE id = ?",
+                (message_id,),
+            ).fetchone()
+            updated_conversation = db.execute(
+                _mock_conversation_list_query("WHERE conversations.id = ?"),
+                (conversation_id,),
+            ).fetchone()
+            if message is None or updated_conversation is None:
+                raise HTTPException(status_code=500, detail="Unable to create mock conversation message")
+
+            return {
+                "mode": MockAroraClient.mode,
+                "message": _public_mock_conversation_message(message),
+                "conversation": _public_mock_conversation(updated_conversation, include_admin=True),
+            }
 
     @app.get("/admin/medication-shipments", tags=["admin"])
     def admin_medication_shipments() -> dict[str, object]:

@@ -465,6 +465,60 @@ def test_admin_can_manage_mock_arora_products(tmp_path) -> None:
     assert missing.status_code == 404
 
 
+def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    patient_token, patient_id = _create_patient_session(client, suffix)
+
+    created = client.post(
+        "/admin/mock/arora/conversations",
+        json={
+            "patient_id": patient_id,
+            "subject": "Care follow-up",
+            "text": "Hello from the care team.",
+            "author": "client",
+            "sender_name": "Care Team",
+        },
+    )
+    assert created.status_code == 200
+    conversation = created.json()["conversation"]
+    assert conversation["patientId"] == patient_id
+    assert conversation["patientName"] == "Mira Chen"
+    assert conversation["subject"] == "Care follow-up"
+    assert conversation["messageCount"] == 1
+    assert conversation["lastMessageText"] == "Hello from the care team."
+
+    listed = client.get("/admin/mock/arora/conversations")
+    assert listed.status_code == 200
+    assert listed.json()["conversations"][0]["conversationId"] == conversation["conversationId"]
+
+    messages = client.get(f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages")
+    assert messages.status_code == 200
+    assert messages.json()["messages"][0]["text"] == "Hello from the care team."
+
+    reply = client.post(
+        f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages",
+        json={
+            "author": "patient",
+            "sender_name": "Mira Chen",
+            "text": "Thanks, I can do that.",
+        },
+    )
+    assert reply.status_code == 200
+    assert reply.json()["conversation"]["lastMessageText"] == "Thanks, I can do that."
+    assert reply.json()["conversation"]["messageCount"] == 2
+
+    patient_conversations = client.get(
+        "/patients/arora/conversations",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert patient_conversations.status_code == 200
+    patient_conversation = patient_conversations.json()["conversations"][0]
+    assert patient_conversation["conversationId"] == conversation["conversationId"]
+    assert patient_conversation["lastMessageText"] == "Thanks, I can do that."
+    assert patient_conversation["messageCount"] == 2
+
+
 def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
 type ApiStatus = 'checking' | 'online' | 'offline';
+type AdminRoute = 'orders' | 'products' | 'mockArora' | 'mockAroraConversations';
+type MockAuthor = 'client' | 'patient';
 
 type OrderStage = {
   value: string;
@@ -46,6 +48,31 @@ type AroraProduct = {
   createdAt: string;
 };
 
+type MockConversation = {
+  conversationId: string;
+  patientId: string;
+  partnerId: string;
+  partnerName: string;
+  patientName: string;
+  patientEmail: string;
+  status: string;
+  subject: string;
+  messageCount: number;
+  lastMessageText: string | null;
+  lastMessageAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+};
+
+type MockConversationMessage = {
+  messageId: string;
+  conversationId: string;
+  author: MockAuthor;
+  senderName: string;
+  text: string;
+  createdAt: string;
+};
+
 const fallbackStages: OrderStage[] = [
   {
     value: 'pending_review',
@@ -65,19 +92,61 @@ const stageVisuals: Record<string, { icon: string; color: string }> = {
   canceled: { icon: 'mdi-cancel', color: 'error' },
 };
 
+const routeItems: { key: AdminRoute; path: string; label: string; icon: string }[] = [
+  { key: 'orders', path: '/orders', label: 'Orders', icon: 'mdi-clipboard-pulse' },
+  { key: 'products', path: '/products', label: 'Products', icon: 'mdi-pill' },
+  { key: 'mockArora', path: '/mock/arora', label: 'Mock Arora', icon: 'mdi-flask-outline' },
+  {
+    key: 'mockAroraConversations',
+    path: '/mock/arora/conversations',
+    label: 'Conversations',
+    icon: 'mdi-message-text-outline',
+  },
+];
+
+const routeCopy: Record<AdminRoute, { eyebrow: string; title: string; description: string }> = {
+  orders: {
+    eyebrow: 'Operations',
+    title: 'Order and prescription queue',
+    description: 'Orders placed through partner Nexus sites appear here for stage review.',
+  },
+  products: {
+    eyebrow: 'Catalog',
+    title: 'Products and packages',
+    description: 'Create and edit products and packages available through the mock Arora catalog.',
+  },
+  mockArora: {
+    eyebrow: 'Mock Arora',
+    title: 'Mock Arora simulator',
+    description: 'Simulation surfaces for the local mock Arora adapter.',
+  },
+  mockAroraConversations: {
+    eyebrow: 'Mock Arora',
+    title: 'Mock conversations',
+    description: 'Initiate and reply to patient conversations through backend-backed mock Arora records.',
+  },
+};
+
 const apiStatus = ref<ApiStatus>('checking');
 const apiMessage = ref('Checking API connection');
-const currentView = ref<'orders' | 'products'>('orders');
+const currentPath = ref(window.location.pathname);
 const orders = ref<MedicationShipment[]>([]);
 const products = ref<AroraProduct[]>([]);
+const mockConversations = ref<MockConversation[]>([]);
+const mockMessages = ref<MockConversationMessage[]>([]);
 const stages = ref<OrderStage[]>(fallbackStages);
 const selectedStage = ref('all');
+const selectedConversationId = ref('');
 const notice = ref('');
 const error = ref('');
 const loading = ref(false);
 const productLoading = ref(false);
+const conversationLoading = ref(false);
+const messageLoading = ref(false);
 const updatingOrderId = ref('');
 const savingProduct = ref(false);
+const savingConversation = ref(false);
+const savingMessage = ref(false);
 const editingProductId = ref('');
 
 const productDraft = reactive({
@@ -92,6 +161,33 @@ const productDraft = reactive({
   status: 'active',
 });
 
+const conversationDraft = reactive({
+  patientId: '',
+  subject: 'Care team',
+  text: '',
+  author: 'client' as MockAuthor,
+  senderName: 'Care Team',
+});
+
+const messageDraft = reactive({
+  author: 'client' as MockAuthor,
+  senderName: 'Care Team',
+  text: '',
+});
+
+const authorItems = [
+  { title: 'Care team', value: 'client' },
+  { title: 'Patient', value: 'patient' },
+];
+
+const currentRoute = computed<AdminRoute>(() => {
+  const path = currentPath.value.replace(/\/+$/, '') || '/orders';
+  if (path === '/products') return 'products';
+  if (path === '/mock/arora') return 'mockArora';
+  if (path === '/mock/arora/conversations') return 'mockAroraConversations';
+  return 'orders';
+});
+const currentRouteCopy = computed(() => routeCopy[currentRoute.value]);
 const stageItems = computed(() => stages.value.map((stage) => ({ title: stage.label, value: stage.value })));
 const productStatusItems = [
   { title: 'Active', value: 'active' },
@@ -108,6 +204,24 @@ const filteredOrders = computed(() => {
   if (selectedStage.value === 'all') return orders.value;
   return orders.value.filter((order) => order.status === selectedStage.value);
 });
+
+const patientItems = computed(() => {
+  const byId = new Map<string, { title: string; value: string; subtitle: string }>();
+  for (const order of orders.value) {
+    if (!byId.has(order.patientId)) {
+      byId.set(order.patientId, {
+        title: order.patientName,
+        value: order.patientId,
+        subtitle: order.patientEmail,
+      });
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => a.title.localeCompare(b.title));
+});
+
+const selectedConversation = computed(() => (
+  mockConversations.value.find((conversation) => conversation.conversationId === selectedConversationId.value) ?? null
+));
 
 const terminalStatuses = new Set(['delivered', 'canceled', 'prescription_rejected']);
 const activeOrders = computed(() => orders.value.filter((order) => !terminalStatuses.has(order.status)));
@@ -128,6 +242,15 @@ const statusCopy = computed(() => {
     return { color: 'warning', icon: 'mdi-alert-circle', label: 'API unavailable' };
   }
   return { color: 'info', icon: 'mdi-progress-clock', label: 'Checking API' };
+});
+
+const refreshCopy = computed(() => {
+  if (currentRoute.value === 'products') return { label: 'Refresh products', loading: productLoading.value };
+  if (currentRoute.value === 'mockAroraConversations') {
+    return { label: 'Refresh conversations', loading: conversationLoading.value };
+  }
+  if (currentRoute.value === 'mockArora') return { label: 'Refresh mock data', loading: loading.value || productLoading.value || conversationLoading.value };
+  return { label: 'Refresh queue', loading: loading.value };
 });
 
 function stageFor(value: string) {
@@ -163,6 +286,18 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+function navigateTo(path: string) {
+  if (window.location.pathname === path) return;
+  window.history.pushState({}, '', path);
+  currentPath.value = window.location.pathname;
+  notice.value = '';
+  error.value = '';
+}
+
+function handlePopstate() {
+  currentPath.value = window.location.pathname;
+}
+
 async function loadOrders() {
   loading.value = true;
   error.value = '';
@@ -172,6 +307,9 @@ async function loadOrders() {
     );
     stages.value = body.stages.length ? body.stages : fallbackStages;
     orders.value = body.medicationShipments;
+    if (!conversationDraft.patientId && patientItems.value.length) {
+      conversationDraft.patientId = patientItems.value[0].value;
+    }
     apiStatus.value = 'online';
     apiMessage.value = 'Backend API returned the admin medication queue.';
   } catch (err) {
@@ -200,6 +338,50 @@ async function loadProducts() {
   }
 }
 
+async function loadMockConversationMessages(conversationId: string) {
+  if (!conversationId) {
+    mockMessages.value = [];
+    return;
+  }
+  messageLoading.value = true;
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; messages: MockConversationMessage[] }>(
+      `/admin/mock/arora/conversations/${encodeURIComponent(conversationId)}/messages`,
+    );
+    mockMessages.value = body.messages;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to load conversation messages.';
+  } finally {
+    messageLoading.value = false;
+  }
+}
+
+async function loadMockConversations() {
+  conversationLoading.value = true;
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; conversations: MockConversation[] }>('/admin/mock/arora/conversations');
+    mockConversations.value = body.conversations;
+    if (!mockConversations.value.some((conversation) => conversation.conversationId === selectedConversationId.value)) {
+      selectedConversationId.value = mockConversations.value[0]?.conversationId ?? '';
+    }
+    if (selectedConversationId.value) {
+      await loadMockConversationMessages(selectedConversationId.value);
+    } else {
+      mockMessages.value = [];
+    }
+    apiStatus.value = 'online';
+    apiMessage.value = 'Backend API returned mock Arora conversations.';
+  } catch (err) {
+    apiStatus.value = 'offline';
+    apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
+    error.value = 'Unable to load mock conversations.';
+  } finally {
+    conversationLoading.value = false;
+  }
+}
+
 async function checkApi() {
   apiStatus.value = 'checking';
   apiMessage.value = `Checking ${API_BASE}/health`;
@@ -213,6 +395,22 @@ async function checkApi() {
     apiStatus.value = 'offline';
     apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
   }
+}
+
+async function refreshCurrentView() {
+  if (currentRoute.value === 'products') {
+    await loadProducts();
+    return;
+  }
+  if (currentRoute.value === 'mockAroraConversations') {
+    await Promise.all([loadOrders(), loadMockConversations()]);
+    return;
+  }
+  if (currentRoute.value === 'mockArora') {
+    await Promise.all([loadOrders(), loadProducts(), loadMockConversations()]);
+    return;
+  }
+  await loadOrders();
 }
 
 function resetProductForm() {
@@ -231,6 +429,7 @@ function resetProductForm() {
 }
 
 function editProduct(product: AroraProduct) {
+  navigateTo('/products');
   editingProductId.value = product.clientProductId;
   Object.assign(productDraft, {
     item_kind: product.itemType === 'package' ? 'package' : 'product',
@@ -328,6 +527,67 @@ async function moveOrderTo(order: MedicationShipment, status: unknown) {
   }
 }
 
+async function createMockConversation() {
+  savingConversation.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: MockConversation }>('/admin/mock/arora/conversations', {
+      method: 'POST',
+      body: JSON.stringify({
+        patient_id: conversationDraft.patientId,
+        subject: conversationDraft.subject.trim() || 'Care team',
+        text: conversationDraft.text.trim(),
+        author: conversationDraft.author,
+        sender_name: conversationDraft.senderName.trim() || 'Care Team',
+      }),
+    });
+    conversationDraft.text = '';
+    selectedConversationId.value = body.conversation.conversationId;
+    await loadMockConversations();
+    notice.value = `Conversation started with ${body.conversation.patientName}.`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to create mock conversation.';
+  } finally {
+    savingConversation.value = false;
+  }
+}
+
+async function selectConversation(conversation: MockConversation) {
+  selectedConversationId.value = conversation.conversationId;
+  await loadMockConversationMessages(conversation.conversationId);
+}
+
+async function sendMockConversationMessage() {
+  if (!selectedConversationId.value) return;
+  savingMessage.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: MockConversation; message: MockConversationMessage }>(
+      `/admin/mock/arora/conversations/${encodeURIComponent(selectedConversationId.value)}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          author: messageDraft.author,
+          sender_name: messageDraft.senderName.trim() || (messageDraft.author === 'patient' ? 'Patient' : 'Care Team'),
+          text: messageDraft.text.trim(),
+        }),
+      },
+    );
+    mockConversations.value = mockConversations.value.map((conversation) => (
+      conversation.conversationId === body.conversation.conversationId ? body.conversation : conversation
+    ));
+    mockMessages.value = [...mockMessages.value, body.message];
+    messageDraft.text = '';
+    notice.value = 'Message added to the mock conversation.';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to add message.';
+  } finally {
+    savingMessage.value = false;
+  }
+}
+
 function formatCurrency(value: number | null) {
   if (value === null) return 'No price';
   return new Intl.NumberFormat(undefined, {
@@ -336,7 +596,8 @@ function formatCurrency(value: number | null) {
   }).format(value);
 }
 
-function formatTimestamp(value: string) {
+function formatTimestamp(value: string | null) {
+  if (!value) return 'No activity yet';
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
@@ -346,9 +607,17 @@ function formatTimestamp(value: string) {
 }
 
 onMounted(async () => {
+  window.addEventListener('popstate', handlePopstate);
+  if (window.location.pathname === '/') {
+    window.history.replaceState({}, '', '/orders');
+    currentPath.value = '/orders';
+  }
   await checkApi();
-  await loadOrders();
-  await loadProducts();
+  await Promise.all([loadOrders(), loadProducts(), loadMockConversations()]);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', handlePopstate);
 });
 </script>
 
@@ -376,45 +645,35 @@ onMounted(async () => {
       <v-container class="py-6 py-md-8" style="max-width: 1280px">
         <div class="d-flex flex-column flex-md-row align-md-end ga-4 mb-6">
           <div>
-            <div class="label mb-3">Manual testing</div>
-            <h1 class="serif text-h3 mb-2">
-              {{ currentView === 'orders' ? 'Order and prescription queue' : 'Products and packages' }}
-            </h1>
-            <div class="text-medium-emphasis">
-              {{
-                currentView === 'orders'
-                  ? 'Orders placed through partner Nexus sites appear here for stage review.'
-                  : 'Create and edit products and packages available through the catalog.'
-              }}
-            </div>
+            <div class="label mb-3">{{ currentRouteCopy.eyebrow }}</div>
+            <h1 class="serif text-h3 mb-2">{{ currentRouteCopy.title }}</h1>
+            <div class="text-medium-emphasis">{{ currentRouteCopy.description }}</div>
           </div>
           <v-spacer />
           <v-btn
-            v-if="currentView === 'orders'"
             color="primary"
             prepend-icon="mdi-refresh"
-            :loading="loading"
+            :loading="refreshCopy.loading"
             variant="flat"
-            @click="loadOrders"
+            @click="refreshCurrentView"
           >
-            Refresh queue
-          </v-btn>
-          <v-btn
-            v-else
-            color="primary"
-            prepend-icon="mdi-refresh"
-            :loading="productLoading"
-            variant="flat"
-            @click="loadProducts"
-          >
-            Refresh products
+            {{ refreshCopy.label }}
           </v-btn>
         </div>
 
-        <v-btn-toggle v-model="currentView" mandatory class="mb-5" color="primary" density="comfortable">
-          <v-btn value="orders" prepend-icon="mdi-clipboard-pulse">Orders</v-btn>
-          <v-btn value="products" prepend-icon="mdi-pill">Products</v-btn>
-        </v-btn-toggle>
+        <nav class="admin-nav mb-5" aria-label="Admin sections">
+          <v-btn
+            v-for="item in routeItems"
+            :key="item.key"
+            :active="currentRoute === item.key"
+            :color="currentRoute === item.key ? 'primary' : undefined"
+            :prepend-icon="item.icon"
+            :variant="currentRoute === item.key ? 'flat' : 'tonal'"
+            @click="navigateTo(item.path)"
+          >
+            {{ item.label }}
+          </v-btn>
+        </nav>
 
         <v-alert class="mb-5" :color="statusCopy.color" :icon="statusCopy.icon" variant="tonal">
           <strong>{{ API_BASE }}</strong> - {{ apiMessage }}
@@ -427,103 +686,103 @@ onMounted(async () => {
           {{ error }}
         </v-alert>
 
-        <template v-if="currentView === 'orders'">
-        <v-row class="mb-5">
-          <v-col cols="12" md="4">
-            <div class="stat">
-              <div class="label mb-2">Active queue</div>
-              <div class="serif text-h4">{{ activeOrders.length }}</div>
-              <div class="text-caption text-medium-emphasis mt-1">Orders still moving.</div>
-            </div>
-          </v-col>
-          <v-col cols="12" md="4">
-            <div class="stat">
-              <div class="label mb-2">Delivered</div>
-              <div class="serif text-h4">{{ completedOrders.length }}</div>
-              <div class="text-caption text-medium-emphasis mt-1">Completed orders.</div>
-            </div>
-          </v-col>
-          <v-col cols="12" md="4">
-            <div class="stat">
-              <div class="label mb-2">Needs attention</div>
-              <div class="serif text-h4">{{ exceptionOrders.length }}</div>
-              <div class="text-caption text-medium-emphasis mt-1">Action required, canceled, or rejected.</div>
-            </div>
-          </v-col>
-        </v-row>
+        <template v-if="currentRoute === 'orders'">
+          <v-row class="mb-5">
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Active queue</div>
+                <div class="serif text-h4">{{ activeOrders.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Orders still moving.</div>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Delivered</div>
+                <div class="serif text-h4">{{ completedOrders.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Completed orders.</div>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Needs attention</div>
+                <div class="serif text-h4">{{ exceptionOrders.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Action required, canceled, or rejected.</div>
+              </div>
+            </v-col>
+          </v-row>
 
-        <v-card class="panel pa-5">
-          <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
-            <div>
-              <h2 class="text-h6 mb-0">Medication shipments</h2>
-              <div class="text-body-2 text-medium-emphasis">Advance a row through the available order stages.</div>
+          <v-card class="panel pa-5">
+            <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
+              <div>
+                <h2 class="text-h6 mb-0">Medication shipments</h2>
+                <div class="text-body-2 text-medium-emphasis">Advance a row through the available order stages.</div>
+              </div>
+              <v-spacer />
+              <v-select
+                v-model="selectedStage"
+                class="stage-filter"
+                density="compact"
+                hide-details
+                :items="[{ title: 'All stages', value: 'all' }, ...stageItems]"
+                label="Stage"
+              />
             </div>
-            <v-spacer />
-            <v-select
-              v-model="selectedStage"
-              class="stage-filter"
-              density="compact"
-              hide-details
-              :items="[{ title: 'All stages', value: 'all' }, ...stageItems]"
-              label="Stage"
-            />
-          </div>
 
-          <div class="order-list">
-            <div v-for="order in filteredOrders" :key="order.id" class="order-row">
-              <div class="order-main">
-                <div class="d-flex align-center ga-2 mb-2">
-                  <v-icon :color="stageFor(order.status).color" :icon="stageFor(order.status).icon" size="20" />
-                  <strong>{{ order.patientName }}</strong>
-                  <v-chip :color="stageFor(order.status).color" size="small" variant="tonal">
-                    {{ stageFor(order.status).label }}
-                  </v-chip>
+            <div class="order-list">
+              <div v-for="order in filteredOrders" :key="order.id" class="order-row">
+                <div class="order-main">
+                  <div class="d-flex align-center ga-2 mb-2">
+                    <v-icon :color="stageFor(order.status).color" :icon="stageFor(order.status).icon" size="20" />
+                    <strong>{{ order.patientName }}</strong>
+                    <v-chip :color="stageFor(order.status).color" size="small" variant="tonal">
+                      {{ stageFor(order.status).label }}
+                    </v-chip>
+                  </div>
+                  <div class="text-body-2 text-medium-emphasis">
+                    {{ order.partnerName }} - {{ order.clientProductId }}
+                  </div>
+                  <div class="order-meta mt-3">
+                    <v-chip size="small" variant="tonal">{{ order.aroraOrderId ?? 'Pending Arora order' }}</v-chip>
+                    <span>{{ order.patientEmail }}</span>
+                    <span>{{ formatTimestamp(order.updatedAt) }}</span>
+                  </div>
                 </div>
-                <div class="text-body-2 text-medium-emphasis">
-                  {{ order.partnerName }} - {{ order.clientProductId }}
-                </div>
-                <div class="order-meta mt-3">
-                  <v-chip size="small" variant="tonal">{{ order.aroraOrderId ?? 'Pending Arora order' }}</v-chip>
-                  <span>{{ order.patientEmail }}</span>
-                  <span>{{ formatTimestamp(order.updatedAt) }}</span>
+
+                <div class="order-actions">
+                  <v-select
+                    density="compact"
+                    hide-details
+                    :items="stageItems"
+                    label="Stage"
+                    :loading="updatingOrderId === order.id"
+                    :model-value="order.status"
+                    @update:model-value="moveOrderTo(order, $event)"
+                  />
+                  <v-btn
+                    block
+                    class="mt-3"
+                    color="primary"
+                    :disabled="!nextStageFor(order.status)"
+                    prepend-icon="mdi-debug-step-over"
+                    :loading="updatingOrderId === order.id"
+                    @click="moveOrderTo(order, nextStageFor(order.status)?.value)"
+                  >
+                    Advance to next stage
+                  </v-btn>
                 </div>
               </div>
 
-              <div class="order-actions">
-                <v-select
-                  density="compact"
-                  hide-details
-                  :items="stageItems"
-                  label="Stage"
-                  :loading="updatingOrderId === order.id"
-                  :model-value="order.status"
-                  @update:model-value="moveOrderTo(order, $event)"
-                />
-                <v-btn
-                  block
-                  class="mt-3"
-                  color="primary"
-                  :disabled="!nextStageFor(order.status)"
-                  prepend-icon="mdi-debug-step-over"
-                  :loading="updatingOrderId === order.id"
-                  @click="moveOrderTo(order, nextStageFor(order.status)?.value)"
-                >
-                  Advance to next stage
-                </v-btn>
-              </div>
+              <v-empty-state
+                v-if="filteredOrders.length === 0"
+                icon="mdi-clipboard-search"
+                title="No orders yet"
+                text="Place an order from a local Nexus patient account, then refresh this queue."
+              />
             </div>
-
-            <v-empty-state
-              v-if="filteredOrders.length === 0"
-              icon="mdi-clipboard-search"
-              title="No orders yet"
-              text="Place an order from a local Nexus patient account, then refresh this queue."
-            />
-          </div>
-        </v-card>
+          </v-card>
         </template>
 
-        <template v-else>
+        <template v-else-if="currentRoute === 'products'">
           <v-row class="mb-5">
             <v-col cols="12" md="4">
               <div class="stat">
@@ -687,6 +946,205 @@ onMounted(async () => {
                   />
                 </div>
               </v-card>
+            </v-col>
+          </v-row>
+        </template>
+
+        <template v-else-if="currentRoute === 'mockArora'">
+          <v-row class="mb-5">
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Mock products</div>
+                <div class="serif text-h4">{{ products.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Records in the mock catalog.</div>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Mock orders</div>
+                <div class="serif text-h4">{{ orders.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Medication shipments backed by Arora order flow.</div>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Conversations</div>
+                <div class="serif text-h4">{{ mockConversations.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Patient conversation simulations.</div>
+              </div>
+            </v-col>
+          </v-row>
+
+          <div class="mock-grid">
+            <v-card class="panel pa-5">
+              <div class="d-flex align-center ga-3 mb-4">
+                <v-icon color="primary" icon="mdi-message-text-outline" />
+                <div>
+                  <h2 class="text-h6 mb-0">Conversations</h2>
+                  <div class="text-body-2 text-medium-emphasis">Start and reply to mock Arora patient threads.</div>
+                </div>
+              </div>
+              <v-btn color="primary" prepend-icon="mdi-arrow-right" @click="navigateTo('/mock/arora/conversations')">
+                Open conversations
+              </v-btn>
+            </v-card>
+
+            <v-card class="panel pa-5">
+              <div class="d-flex align-center ga-3 mb-4">
+                <v-icon color="primary" icon="mdi-pill" />
+                <div>
+                  <h2 class="text-h6 mb-0">Products</h2>
+                  <div class="text-body-2 text-medium-emphasis">Edit the mock Arora catalog used by patient ordering.</div>
+                </div>
+              </div>
+              <v-btn variant="tonal" prepend-icon="mdi-arrow-right" @click="navigateTo('/products')">
+                Open products
+              </v-btn>
+            </v-card>
+          </div>
+        </template>
+
+        <template v-else>
+          <v-row align="start">
+            <v-col cols="12" lg="4">
+              <v-card class="panel pa-5">
+                <div class="d-flex align-center ga-3 mb-5">
+                  <v-icon color="primary" icon="mdi-message-plus-outline" />
+                  <div>
+                    <h2 class="text-h6 mb-0">Start conversation</h2>
+                    <div class="text-body-2 text-medium-emphasis">Use a patient from the current admin order queue.</div>
+                  </div>
+                </div>
+
+                <v-form @submit.prevent="createMockConversation">
+                  <v-select
+                    v-model="conversationDraft.patientId"
+                    :disabled="patientItems.length === 0"
+                    :items="patientItems"
+                    item-title="title"
+                    item-value="value"
+                    label="Patient"
+                  >
+                    <template #item="{ props, item }">
+                      <v-list-item v-bind="props" :subtitle="item.raw.subtitle" />
+                    </template>
+                  </v-select>
+                  <v-text-field v-model="conversationDraft.subject" label="Subject" />
+                  <v-select v-model="conversationDraft.author" :items="authorItems" label="Initial author" />
+                  <v-text-field v-model="conversationDraft.senderName" label="Sender name" />
+                  <v-textarea
+                    v-model="conversationDraft.text"
+                    auto-grow
+                    label="Initial message"
+                    rows="4"
+                    variant="outlined"
+                  />
+                  <v-btn
+                    color="primary"
+                    :disabled="patientItems.length === 0"
+                    :loading="savingConversation"
+                    prepend-icon="mdi-message-plus-outline"
+                    type="submit"
+                  >
+                    Start conversation
+                  </v-btn>
+                </v-form>
+              </v-card>
+            </v-col>
+
+            <v-col cols="12" lg="8">
+              <div class="conversation-layout">
+                <v-card class="panel pa-5">
+                  <div class="d-flex align-center ga-3 mb-5">
+                    <v-icon color="primary" icon="mdi-forum-outline" />
+                    <div>
+                      <h2 class="text-h6 mb-0">Conversation list</h2>
+                      <div class="text-body-2 text-medium-emphasis">Mock threads stored by the backend.</div>
+                    </div>
+                  </div>
+
+                  <div class="conversation-list">
+                    <button
+                      v-for="conversation in mockConversations"
+                      :key="conversation.conversationId"
+                      class="conversation-row"
+                      :class="{ 'is-selected': conversation.conversationId === selectedConversationId }"
+                      type="button"
+                      @click="selectConversation(conversation)"
+                    >
+                      <div>
+                        <div class="conversation-title">
+                          <strong>{{ conversation.subject }}</strong>
+                          <span>{{ conversation.patientName }}</span>
+                        </div>
+                        <div class="text-body-2 text-medium-emphasis">
+                          {{ conversation.lastMessageText || 'No messages yet' }}
+                        </div>
+                      </div>
+                      <div class="conversation-meta">
+                        <v-chip size="small" variant="tonal">{{ conversation.messageCount }} messages</v-chip>
+                        <span>{{ formatTimestamp(conversation.lastMessageAt || conversation.updatedAt) }}</span>
+                      </div>
+                    </button>
+
+                    <v-empty-state
+                      v-if="mockConversations.length === 0"
+                      icon="mdi-message-text-outline"
+                      title="No mock conversations yet"
+                      text="Start a conversation with a patient from the admin order queue."
+                    />
+                  </div>
+                </v-card>
+
+                <v-card class="panel pa-5">
+                  <div class="d-flex align-center ga-3 mb-5">
+                    <v-icon color="primary" icon="mdi-message-reply-text-outline" />
+                    <div>
+                      <h2 class="text-h6 mb-0">{{ selectedConversation?.subject || 'Messages' }}</h2>
+                      <div class="text-body-2 text-medium-emphasis">
+                        {{ selectedConversation ? selectedConversation.patientEmail : 'Select a conversation to view messages.' }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="selectedConversation" class="message-list mb-5">
+                    <div
+                      v-for="message in mockMessages"
+                      :key="message.messageId"
+                      class="message-row"
+                      :class="message.author === 'patient' ? 'is-patient' : 'is-client'"
+                    >
+                      <div class="d-flex justify-space-between ga-3 mb-1">
+                        <strong>{{ message.senderName }}</strong>
+                        <span class="text-caption text-medium-emphasis">{{ formatTimestamp(message.createdAt) }}</span>
+                      </div>
+                      <div>{{ message.text }}</div>
+                    </div>
+                    <v-progress-linear v-if="messageLoading" color="primary" indeterminate />
+                  </div>
+
+                  <v-form v-if="selectedConversation" @submit.prevent="sendMockConversationMessage">
+                    <v-row>
+                      <v-col cols="12" sm="6">
+                        <v-select v-model="messageDraft.author" :items="authorItems" label="Reply as" />
+                      </v-col>
+                      <v-col cols="12" sm="6">
+                        <v-text-field v-model="messageDraft.senderName" label="Sender name" />
+                      </v-col>
+                    </v-row>
+                    <v-textarea
+                      v-model="messageDraft.text"
+                      auto-grow
+                      label="Reply"
+                      rows="3"
+                      variant="outlined"
+                    />
+                    <v-btn color="primary" :loading="savingMessage" prepend-icon="mdi-send" type="submit">
+                      Send reply
+                    </v-btn>
+                  </v-form>
+                </v-card>
+              </div>
             </v-col>
           </v-row>
         </template>
