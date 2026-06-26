@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
-type ApiStatus = 'checking' | 'online' | 'offline';
 type AdminRoute = 'orders' | 'products' | 'mockArora' | 'mockAroraConversations';
 type MockAuthor = 'client' | 'patient';
 
@@ -131,7 +130,6 @@ const routeCopy: Record<AdminRoute, { eyebrow: string; title: string; descriptio
   },
 };
 
-const apiStatus = ref<ApiStatus>('checking');
 const currentPath = ref(window.location.pathname);
 const orders = ref<MedicationShipment[]>([]);
 const products = ref<AroraProduct[]>([]);
@@ -254,16 +252,6 @@ const exceptionOrders = computed(() => orders.value.filter((order) => (
 const activeProducts = computed(() => products.value.filter((product) => product.status === 'active'));
 const inactiveProducts = computed(() => products.value.filter((product) => product.status === 'inactive'));
 
-const statusCopy = computed(() => {
-  if (apiStatus.value === 'online') {
-    return { color: 'success', icon: 'mdi-check-circle', label: 'API online' };
-  }
-  if (apiStatus.value === 'offline') {
-    return { color: 'warning', icon: 'mdi-alert-circle', label: 'API unavailable' };
-  }
-  return { color: 'info', icon: 'mdi-progress-clock', label: 'Checking API' };
-});
-
 const refreshCopy = computed(() => {
   if (currentRoute.value === 'products') return { label: 'Refresh products', loading: productLoading.value };
   if (currentRoute.value === 'mockAroraConversations') {
@@ -338,9 +326,7 @@ async function loadOrders() {
     if (!conversationDraft.patientId && patientItems.value.length) {
       conversationDraft.patientId = patientItems.value[0].value;
     }
-    apiStatus.value = 'online';
   } catch (err) {
-    apiStatus.value = 'offline';
     error.value = 'Unable to load the admin order queue.';
   } finally {
     loading.value = false;
@@ -353,9 +339,7 @@ async function loadProducts() {
   try {
     const body = await api<{ mode: string; products: AroraProduct[] }>('/admin/arora/products');
     products.value = body.products;
-    apiStatus.value = 'online';
   } catch (err) {
-    apiStatus.value = 'offline';
     error.value = 'Unable to load products.';
   } finally {
     productLoading.value = false;
@@ -398,24 +382,10 @@ async function loadMockConversations() {
     } else {
       mockMessages.value = [];
     }
-    apiStatus.value = 'online';
   } catch (err) {
-    apiStatus.value = 'offline';
     error.value = 'Unable to load conversations.';
   } finally {
     conversationLoading.value = false;
-  }
-}
-
-async function checkApi() {
-  apiStatus.value = 'checking';
-  try {
-    const response = await fetch(`${API_BASE}/health`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    await response.json().catch(() => ({}));
-    apiStatus.value = 'online';
-  } catch (err) {
-    apiStatus.value = 'offline';
   }
 }
 
@@ -785,7 +755,6 @@ onMounted(async () => {
     window.history.replaceState({}, '', '/orders');
     currentPath.value = '/orders';
   }
-  await checkApi();
   await Promise.all([loadOrders(), loadProducts(), loadMockConversations()]);
 });
 
@@ -807,10 +776,6 @@ onUnmounted(() => {
             <div class="text-caption text-medium-emphasis">Operations console</div>
           </div>
         </div>
-        <v-spacer />
-        <v-chip :color="statusCopy.color" :prepend-icon="statusCopy.icon" variant="tonal">
-          {{ statusCopy.label }}
-        </v-chip>
       </v-container>
     </v-app-bar>
 
