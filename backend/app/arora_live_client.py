@@ -6,11 +6,11 @@ import urllib.request
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from app.arora_client import AroraClientError, AroraNotFoundError, AroraValidationError
+from app.arora_client import AroraClientError, AroraConflictError, AroraNotFoundError, AroraValidationError
 
 
 # Before changing endpoint paths, payloads, or response normalization here, read
-# docs/arora/README.md and the copied Arora examples under docs/arora/.
+# docs/arora/README.md and docs/arora/api-reference.md.
 # Real Arora HTTP integration lives here. Do not add SQLite-backed fallback
 # behavior to this class; if a feature needs local simulation, implement the
 # matching method in MockAroraClient and keep this class focused on /v2/client
@@ -29,13 +29,13 @@ class LiveAroraClient:
         return self._request("POST", "/v2/client/orders", order_payload)
 
     def list_products(self, item_type: str | None = None, include_inactive: bool = True) -> list[dict[str, Any]]:
-        query: dict[str, str | int] = {}
+        response = self._request("GET", "/v2/client/products")
+        products = _collection(response, "products")
         if item_type:
-            query["itemType"] = item_type
-        if include_inactive:
-            query["includeInactive"] = 1
-        response = self._request("GET", "/v2/client/products", query=query or None)
-        return _collection(response, "products")
+            products = [product for product in products if product.get("itemType") == item_type]
+        if not include_inactive:
+            products = [product for product in products if product.get("status") != "inactive"]
+        return products
 
     def create_product(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         response = self._request("POST", "/v2/client/products", dict(payload))
@@ -48,8 +48,8 @@ class LiveAroraClient:
     def delete_product(self, client_product_id: str) -> dict[str, Any]:
         response = self._request("DELETE", f"/v2/client/products/{_quote(client_product_id)}")
         if isinstance(response, dict) and response:
-            return response
-        return {"deleted": True, "clientProductId": client_product_id}
+            return _entity(response, "product")
+        return {"clientProductId": client_product_id, "status": "inactive", "showPatient": False}
 
     def get_patient_visible_product(self, client_product_id: str) -> dict[str, Any] | None:
         try:
@@ -193,10 +193,9 @@ class LiveAroraClient:
         }
 
     def delete_message(self, conversation_id: str, message_id: str, *, include_admin: bool = False) -> dict[str, Any]:
-        self._request("DELETE", f"/v2/client/conversations/{_quote(conversation_id)}/messages/{_quote(message_id)}")
+        response = self._request("DELETE", f"/v2/client/conversations/{_quote(conversation_id)}/messages/{_quote(message_id)}")
         return {
-            "deleted": True,
-            "messageId": message_id,
+            "message": _entity(response, "message") if isinstance(response, dict) and response else {"messageId": message_id},
             "conversation": self.get_conversation(conversation_id),
         }
 
@@ -234,6 +233,8 @@ class LiveAroraClient:
             detail = _error_detail(error)
             if error.code == 404:
                 raise AroraNotFoundError(detail) from error
+            if error.code == 409:
+                raise AroraConflictError(detail) from error
             if error.code in {400, 422}:
                 raise AroraValidationError(detail) from error
             raise AroraClientError(detail) from error

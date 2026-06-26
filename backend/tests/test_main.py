@@ -478,10 +478,58 @@ def test_admin_can_manage_mock_arora_products(tmp_path) -> None:
 
     deleted = client.delete("/admin/arora/products/mock_product_longevity_consult")
     assert deleted.status_code == 200
-    assert deleted.json()["deleted"] is True
+    assert deleted.json()["clientProductId"] == "mock_product_longevity_consult"
+    assert deleted.json()["status"] == "inactive"
+    assert deleted.json()["showPatient"] is False
 
     missing = client.patch("/admin/arora/products/mock_product_longevity_consult", json={"name": "Gone"})
-    assert missing.status_code == 404
+    assert missing.status_code == 200
+    assert missing.json()["product"]["status"] == "inactive"
+    assert missing.json()["product"]["showPatient"] is False
+
+
+def test_live_arora_product_methods_use_documented_shapes(monkeypatch) -> None:
+    calls = []
+
+    def fake_arora_api_request(self, method, path, payload=None, query=None):
+        calls.append({"method": method, "path": path, "payload": payload, "query": query})
+        if method == "GET" and path == "/v2/client/products":
+            return {
+                "success": True,
+                "data": {
+                    "products": [
+                        {"clientProductId": "active_product", "status": "active"},
+                        {"clientProductId": "inactive_product", "status": "inactive"},
+                    ]
+                },
+            }
+        if method == "DELETE" and path == "/v2/client/products/inactive_product":
+            return {
+                "success": True,
+                "data": {
+                    "product": {
+                        "clientProductId": "inactive_product",
+                        "status": "inactive",
+                        "showPatient": False,
+                    }
+                },
+            }
+        raise AssertionError(f"Unexpected Arora call {method} {path}")
+
+    monkeypatch.setattr(LiveAroraClient, "_request", fake_arora_api_request)
+
+    arora_client = LiveAroraClient(api_key="test-arora-key")
+
+    products = arora_client.list_products(include_inactive=False)
+    assert products == [{"clientProductId": "active_product", "status": "active"}]
+    assert calls[0] == {"method": "GET", "path": "/v2/client/products", "payload": None, "query": None}
+
+    deleted = arora_client.delete_product("inactive_product")
+    assert deleted == {
+        "clientProductId": "inactive_product",
+        "status": "inactive",
+        "showPatient": False,
+    }
 
 
 def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
@@ -590,7 +638,8 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
         f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages/{reply_message_id}"
     )
     assert deleted_message.status_code == 200
-    assert deleted_message.json()["deleted"] is True
+    assert deleted_message.json()["message"]["messageId"] == reply_message_id
+    assert deleted_message.json()["message"]["deletedAt"] is not None
     assert deleted_message.json()["conversation"]["messageCount"] == 2
 
     archived = client.delete(f"/admin/mock/arora/conversations/{conversation['conversationId']}")

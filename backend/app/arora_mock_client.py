@@ -210,14 +210,25 @@ class MockAroraClient:
 
     def create_patient(self, patient_payload: dict[str, Any]) -> dict[str, Any]:
         patient = patient_payload["patient"]
+        email = self._required(patient.get("email"), "patient.email")
+        self._required(patient.get("firstName"), "patient.firstName")
+        self._required(patient.get("lastName"), "patient.lastName")
+        self._required(patient.get("phone"), "patient.phone")
+        self._required(patient.get("dateOfBirth"), "patient.dateOfBirth")
+        address = patient.get("address")
+        if not isinstance(address, Mapping):
+            raise AroraValidationError("patient.address is required")
+        for key in ("street1", "city", "state", "zip"):
+            self._required(address.get(key), f"patient.address.{key}")
+        partner_patient_id = str(patient.get("partnerPatientId") or f"mock_{email}").strip()
         return {
             "success": True,
             "message": "Mock Arora patient created",
             "data": {
-                "patientId": f"mock_patient_{patient['partnerPatientId']}",
-                "partnerPatientId": patient["partnerPatientId"],
+                "patientId": f"mock_patient_{partner_patient_id}",
+                "partnerPatientId": patient.get("partnerPatientId"),
                 "status": "pending",
-                "emailSent": False,
+                "emailSent": bool(patient_payload.get("send_email", True)),
                 "magicLink": None,
             },
         }
@@ -225,19 +236,48 @@ class MockAroraClient:
     def create_order(self, order_payload: dict[str, Any]) -> dict[str, Any]:
         order_id = f"mock_order_{uuid.uuid4().hex[:12]}"
         order = order_payload["order"]
+        patient_id = str(order_payload.get("patient_id") or order_payload.get("patientId") or "").strip()
+        if not patient_id:
+            raise AroraValidationError("patient_id or patientId is required")
+        client_product_id = str(order.get("clientProductId") or order.get("productId") or "").strip()
+        if not client_product_id:
+            raise AroraValidationError("order.clientProductId is required")
+        payment_status = str(order.get("payment_status") or "unpaid").strip().lower()
+        if payment_status not in {"paid", "unpaid"}:
+            raise AroraValidationError("order.payment_status must be paid or unpaid")
+        order_status = "pending_review" if payment_status == "paid" else "pending_payment"
+        required_actions = ["forms", "patient_continuation"] if payment_status == "unpaid" else []
         return {
             "success": True,
             "data": {
                 "orderId": order_id,
-                "patientId": order_payload["patient_id"],
-                "clientProductId": order["clientProductId"],
+                "orderIds": [order_id],
+                "patientId": patient_id,
+                "clientProductId": client_product_id,
                 "orderType": "product",
-                "orderStatus": "pending_review",
-                "paymentStatus": order["payment_status"],
+                "orderStatus": order_status,
+                "paymentStatus": payment_status,
                 "paymentVerificationStatus": "not_required",
-                "requiredActions": [],
+                "paymentVerification": None,
+                "requiredActions": required_actions,
+                "continuationSupported": True,
+                "duplicateOrder": False,
                 "reviewRequired": "async",
                 "prescriptions": [],
+                "orders": [
+                    {
+                        "orderId": order_id,
+                        "clientProductId": client_product_id,
+                        "orderType": "product",
+                        "orderStatus": order_status,
+                        "paymentStatus": payment_status,
+                        "paymentVerificationStatus": "not_required",
+                        "paymentVerification": None,
+                        "amount": order.get("amount"),
+                        "customFields": order.get("customFields") or {},
+                        "duplicateOrder": False,
+                    }
+                ],
             },
         }
 
@@ -332,6 +372,13 @@ class MockAroraClient:
             "displayCategoryIds",
         )
 
+        show_patient = self._normalize_bool(
+            payload["showPatient"] if "showPatient" in payload else bool(existing["show_patient"]),
+            True,
+        )
+        if "status" in payload and payload["status"] is not None:
+            show_patient = status == "active"
+
         self.db.execute(
             """
             UPDATE arora_mock_products
@@ -365,10 +412,7 @@ class MockAroraClient:
                     if "displayDescription" in payload and payload["displayDescription"] is not None
                     else existing["display_description"]
                 ).strip(),
-                1 if self._normalize_bool(
-                    payload["showPatient"] if "showPatient" in payload else bool(existing["show_patient"]),
-                    True,
-                ) else 0,
+                1 if show_patient else 0,
                 json.dumps(display_category_ids, sort_keys=True),
                 status,
                 datetime.now(UTC).isoformat(),
@@ -381,8 +425,15 @@ class MockAroraClient:
         if not self._product_exists(client_product_id):
             raise AroraNotFoundError("Mock Arora product not found")
 
-        self.db.execute("DELETE FROM arora_mock_products WHERE client_product_id = ?", (client_product_id,))
-        return {"deleted": True, "clientProductId": client_product_id}
+        self.db.execute(
+            """
+            UPDATE arora_mock_products
+            SET status = 'inactive', show_patient = 0, updated_at = ?
+            WHERE client_product_id = ?
+            """,
+            (datetime.now(UTC).isoformat(), client_product_id),
+        )
+        return self._get_product(client_product_id, "Unable to deactivate mock Arora product")
 
     def get_patient_visible_product(self, client_product_id: str) -> dict[str, Any] | None:
         product = self.db.execute(
@@ -603,7 +654,7 @@ class MockAroraClient:
         }
 
     def delete_message(self, conversation_id: str, message_id: str, *, include_admin: bool = False) -> dict[str, Any]:
-        self._get_message_row(conversation_id, message_id)
+        message = _public_message(self._get_message_row(conversation_id, message_id))
         now = datetime.now(UTC).isoformat()
         self.db.execute(
             "DELETE FROM arora_mock_conversation_messages WHERE conversation_id = ? AND id = ?",
@@ -617,9 +668,9 @@ class MockAroraClient:
             """,
             (now, conversation_id),
         )
+        message["deletedAt"] = now
         return {
-            "deleted": True,
-            "messageId": message_id,
+            "message": message,
             "conversation": self.get_conversation(conversation_id, include_admin=include_admin),
         }
 
@@ -681,7 +732,7 @@ class MockAroraClient:
         placeholders = ",".join("?" for _ in unique_ids)
         rows = self.db.execute(
             f"""
-            SELECT client_product_id, item_type, status
+            SELECT client_product_id, item_type, status, show_patient
             FROM arora_mock_products
             WHERE client_product_id IN ({placeholders})
             """,
@@ -690,10 +741,10 @@ class MockAroraClient:
         valid_ids = {
             row["client_product_id"]
             for row in rows
-            if row["status"] == "active" and row["item_type"] is None
+            if row["status"] == "active" and row["item_type"] is None and bool(row["show_patient"])
         }
         if valid_ids != unique_ids:
-            raise AroraValidationError("Packages can only include active, non-package clientProductIds")
+            raise AroraValidationError("Packages can only include active, patient-visible, non-package clientProductIds")
 
         return included_products
 
