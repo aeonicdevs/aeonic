@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 from uuid import uuid4
 
 import app.main as main
+from app.arora_live_client import LiveAroraClient
 from app.main import create_app
 
 
@@ -213,7 +214,7 @@ def test_patient_medication_shipment_defaults_to_mock_order(monkeypatch, tmp_pat
         headers={"Authorization": f"Bearer {patient_token}"},
     )
     assert conversations.status_code == 200
-    assert conversations.json()["conversations"][0]["patientId"] == patient_id
+    assert conversations.json()["conversations"] == []
 
     prescriptions = client.get(
         "/patients/arora/prescriptions",
@@ -238,8 +239,20 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
     patient_token, patient_id = _create_patient_session(client, suffix)
     calls = []
 
-    def fake_arora_api_request(method, path, payload=None, query=None):
+    def fake_arora_api_request(self, method, path, payload=None, query=None):
         calls.append({"method": method, "path": path, "payload": payload, "query": query})
+        if path == "/v2/client/products/mock_client_product_order":
+            return {
+                "data": {
+                    "clientProductId": "mock_client_product_order",
+                    "name": "Weight Optimization Program",
+                    "displayName": "Weight Optimization Program",
+                    "customerPrice": 199.00,
+                    "itemType": None,
+                    "status": "active",
+                    "showPatient": True,
+                }
+            }
         if path == "/v2/client/patients":
             return {"success": True, "data": {"patientId": "arora_patient_123"}}
         if path == "/v2/client/orders":
@@ -256,7 +269,7 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
             }
         raise AssertionError(f"Unexpected Arora path {path}")
 
-    monkeypatch.setattr(main, "_arora_api_request", fake_arora_api_request)
+    monkeypatch.setattr(LiveAroraClient, "_request", fake_arora_api_request)
 
     response = client.post(
         "/patients/medication-shipments",
@@ -283,6 +296,12 @@ def test_patient_medication_shipment_creates_arora_patient_and_order(monkeypatch
     assert shipment["aroraPatientId"] == "arora_patient_123"
     assert shipment["aroraOrderId"] == "order456"
     assert calls == [
+        {
+            "method": "GET",
+            "path": "/v2/client/products/mock_client_product_order",
+            "payload": None,
+            "query": None,
+        },
         {
             "method": "POST",
             "path": "/v2/client/patients",
@@ -494,7 +513,9 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
 
     messages = client.get(f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages")
     assert messages.status_code == 200
-    assert messages.json()["messages"][0]["text"] == "Hello from the care team."
+    initial_message = messages.json()["messages"][0]
+    assert initial_message["text"] == "Hello from the care team."
+    assert initial_message["attachments"] == []
 
     reply = client.post(
         f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages",
@@ -507,6 +528,35 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
     assert reply.status_code == 200
     assert reply.json()["conversation"]["lastMessageText"] == "Thanks, I can do that."
     assert reply.json()["conversation"]["messageCount"] == 2
+    reply_message_id = reply.json()["message"]["messageId"]
+
+    updated_status = client.patch(
+        f"/admin/mock/arora/conversations/{conversation['conversationId']}",
+        json={"status": "closed"},
+    )
+    assert updated_status.status_code == 200
+    assert updated_status.json()["conversation"]["status"] == "closed"
+
+    escalation = client.post(
+        f"/admin/mock/arora/conversations/{conversation['conversationId']}/escalations",
+        json={"reason": "Provider review requested"},
+    )
+    assert escalation.status_code == 200
+    assert escalation.json()["conversation"]["escalationReason"] == "Provider review requested"
+    assert escalation.json()["conversation"]["escalatedAt"] is not None
+
+    single_message = client.get(
+        f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages/{reply_message_id}"
+    )
+    assert single_message.status_code == 200
+    assert single_message.json()["message"]["messageId"] == reply_message_id
+
+    edited_message = client.patch(
+        f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages/{reply_message_id}",
+        json={"text": "Thanks, I can do that today."},
+    )
+    assert edited_message.status_code == 200
+    assert edited_message.json()["message"]["text"] == "Thanks, I can do that today."
 
     patient_conversations = client.get(
         "/patients/arora/conversations",
@@ -515,8 +565,46 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
     assert patient_conversations.status_code == 200
     patient_conversation = patient_conversations.json()["conversations"][0]
     assert patient_conversation["conversationId"] == conversation["conversationId"]
-    assert patient_conversation["lastMessageText"] == "Thanks, I can do that."
+    assert patient_conversation["lastMessageText"] == "Thanks, I can do that today."
     assert patient_conversation["messageCount"] == 2
+
+    patient_messages = client.get(
+        f"/patients/arora/conversations/{conversation['conversationId']}/messages",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert patient_messages.status_code == 200
+    assert patient_messages.json()["messages"][1]["author"] == "patient"
+
+    patient_reply = client.post(
+        f"/patients/arora/conversations/{conversation['conversationId']}/messages",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={
+            "text": "Patient-authored follow-up.",
+            "attachments": [{"url": "https://example.com/lab.pdf", "name": "Lab PDF"}],
+        },
+    )
+    assert patient_reply.status_code == 200
+    assert patient_reply.json()["message"]["author"] == "patient"
+    assert patient_reply.json()["message"]["attachments"][0]["name"] == "Lab PDF"
+
+    deleted_message = client.delete(
+        f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages/{reply_message_id}"
+    )
+    assert deleted_message.status_code == 200
+    assert deleted_message.json()["deleted"] is True
+    assert deleted_message.json()["conversation"]["messageCount"] == 2
+
+    archived = client.delete(f"/admin/mock/arora/conversations/{conversation['conversationId']}")
+    assert archived.status_code == 200
+    assert archived.json()["conversation"]["status"] == "archived"
+
+    patient_created = client.post(
+        "/patients/arora/conversations",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={"subject": "Billing question", "text": "Can you confirm this order?"},
+    )
+    assert patient_created.status_code == 200
+    assert patient_created.json()["conversation"]["subject"] == "Billing question"
 
 
 def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:

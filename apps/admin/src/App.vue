@@ -57,6 +57,8 @@ type MockConversation = {
   patientEmail: string;
   status: string;
   subject: string;
+  escalationReason: string | null;
+  escalatedAt: string | null;
   messageCount: number;
   lastMessageText: string | null;
   lastMessageAt: string | null;
@@ -68,8 +70,11 @@ type MockConversationMessage = {
   messageId: string;
   conversationId: string;
   author: MockAuthor;
+  senderUserId: string | null;
   senderName: string;
   text: string;
+  attachments: { url: string; name?: string; mimeType?: string; size?: number }[];
+  updatedAt: string;
   createdAt: string;
 };
 
@@ -95,10 +100,10 @@ const stageVisuals: Record<string, { icon: string; color: string }> = {
 const routeItems: { key: AdminRoute; path: string; label: string; icon: string }[] = [
   { key: 'orders', path: '/orders', label: 'Orders', icon: 'mdi-clipboard-pulse' },
   { key: 'products', path: '/products', label: 'Products', icon: 'mdi-pill' },
-  { key: 'mockArora', path: '/mock/arora', label: 'Mock Arora', icon: 'mdi-flask-outline' },
+  { key: 'mockArora', path: '/arora', label: 'Arora', icon: 'mdi-flask-outline' },
   {
     key: 'mockAroraConversations',
-    path: '/mock/arora/conversations',
+    path: '/arora/conversations',
     label: 'Conversations',
     icon: 'mdi-message-text-outline',
   },
@@ -113,17 +118,17 @@ const routeCopy: Record<AdminRoute, { eyebrow: string; title: string; descriptio
   products: {
     eyebrow: 'Catalog',
     title: 'Products and packages',
-    description: 'Create and edit products and packages available through the mock Arora catalog.',
+    description: 'Create and edit products and packages available through the selected Arora client.',
   },
   mockArora: {
-    eyebrow: 'Mock Arora',
-    title: 'Mock Arora simulator',
-    description: 'Simulation surfaces for the local mock Arora adapter.',
+    eyebrow: 'Arora',
+    title: 'Arora simulator',
+    description: 'Simulation and live-client surfaces for the configured Arora adapter.',
   },
   mockAroraConversations: {
-    eyebrow: 'Mock Arora',
-    title: 'Mock conversations',
-    description: 'Initiate and reply to patient conversations through backend-backed mock Arora records.',
+    eyebrow: 'Arora',
+    title: 'Conversations',
+    description: 'Initiate and reply to patient conversations through the configured Arora client.',
   },
 };
 
@@ -147,7 +152,9 @@ const updatingOrderId = ref('');
 const savingProduct = ref(false);
 const savingConversation = ref(false);
 const savingMessage = ref(false);
+const updatingConversation = ref(false);
 const editingProductId = ref('');
+const editingMessageId = ref('');
 
 const productDraft = reactive({
   item_kind: 'product',
@@ -167,24 +174,38 @@ const conversationDraft = reactive({
   text: '',
   author: 'client' as MockAuthor,
   senderName: 'Care Team',
+  senderUserId: '',
+  attachmentUrls: '',
 });
 
 const messageDraft = reactive({
   author: 'client' as MockAuthor,
   senderName: 'Care Team',
+  senderUserId: '',
   text: '',
+  attachmentUrls: '',
+});
+
+const conversationControls = reactive({
+  status: 'active',
+  escalationReason: '',
 });
 
 const authorItems = [
   { title: 'Care team', value: 'client' },
   { title: 'Patient', value: 'patient' },
 ];
+const conversationStatusItems = [
+  { title: 'Active', value: 'active' },
+  { title: 'Closed', value: 'closed' },
+  { title: 'Archived', value: 'archived' },
+];
 
 const currentRoute = computed<AdminRoute>(() => {
   const path = currentPath.value.replace(/\/+$/, '') || '/orders';
   if (path === '/products') return 'products';
-  if (path === '/mock/arora') return 'mockArora';
-  if (path === '/mock/arora/conversations') return 'mockAroraConversations';
+  if (path === '/mock/arora' || path === '/arora') return 'mockArora';
+  if (path === '/mock/arora/conversations' || path === '/arora/conversations') return 'mockAroraConversations';
   return 'orders';
 });
 const currentRouteCopy = computed(() => routeCopy[currentRoute.value]);
@@ -222,6 +243,8 @@ const patientItems = computed(() => {
 const selectedConversation = computed(() => (
   mockConversations.value.find((conversation) => conversation.conversationId === selectedConversationId.value) ?? null
 ));
+const activeConversations = computed(() => mockConversations.value.filter((conversation) => conversation.status === 'active'));
+const escalatedConversations = computed(() => mockConversations.value.filter((conversation) => conversation.escalatedAt));
 
 const terminalStatuses = new Set(['delivered', 'canceled', 'prescription_rejected']);
 const activeOrders = computed(() => orders.value.filter((order) => !terminalStatuses.has(order.status)));
@@ -261,6 +284,14 @@ function stageFor(value: string) {
   };
   const visual = stageVisuals[value] ?? { icon: 'mdi-progress-question', color: 'default' };
   return { ...metadata, ...visual };
+}
+
+function parseAttachmentUrls(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map((url) => ({ url, name: url.split('/').pop() || 'Attachment' }));
 }
 
 function nextStageFor(value: string) {
@@ -347,7 +378,7 @@ async function loadMockConversationMessages(conversationId: string) {
   error.value = '';
   try {
     const body = await api<{ mode: string; messages: MockConversationMessage[] }>(
-      `/admin/mock/arora/conversations/${encodeURIComponent(conversationId)}/messages`,
+      `/admin/arora/conversations/${encodeURIComponent(conversationId)}/messages`,
     );
     mockMessages.value = body.messages;
   } catch (err) {
@@ -361,22 +392,25 @@ async function loadMockConversations() {
   conversationLoading.value = true;
   error.value = '';
   try {
-    const body = await api<{ mode: string; conversations: MockConversation[] }>('/admin/mock/arora/conversations');
+    const body = await api<{ mode: string; conversations: MockConversation[] }>('/admin/arora/conversations');
     mockConversations.value = body.conversations;
     if (!mockConversations.value.some((conversation) => conversation.conversationId === selectedConversationId.value)) {
       selectedConversationId.value = mockConversations.value[0]?.conversationId ?? '';
     }
     if (selectedConversationId.value) {
       await loadMockConversationMessages(selectedConversationId.value);
+      const selected = selectedConversation.value;
+      conversationControls.status = selected?.status ?? 'active';
+      conversationControls.escalationReason = selected?.escalationReason ?? '';
     } else {
       mockMessages.value = [];
     }
     apiStatus.value = 'online';
-    apiMessage.value = 'Backend API returned mock Arora conversations.';
+    apiMessage.value = 'Backend API returned Arora conversations.';
   } catch (err) {
     apiStatus.value = 'offline';
     apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
-    error.value = 'Unable to load mock conversations.';
+    error.value = 'Unable to load conversations.';
   } finally {
     conversationLoading.value = false;
   }
@@ -532,7 +566,7 @@ async function createMockConversation() {
   notice.value = '';
   error.value = '';
   try {
-    const body = await api<{ mode: string; conversation: MockConversation }>('/admin/mock/arora/conversations', {
+    const body = await api<{ mode: string; conversation: MockConversation }>('/admin/arora/conversations', {
       method: 'POST',
       body: JSON.stringify({
         patient_id: conversationDraft.patientId,
@@ -540,9 +574,12 @@ async function createMockConversation() {
         text: conversationDraft.text.trim(),
         author: conversationDraft.author,
         sender_name: conversationDraft.senderName.trim() || 'Care Team',
+        sender_user_id: conversationDraft.senderUserId.trim() || undefined,
+        attachments: parseAttachmentUrls(conversationDraft.attachmentUrls),
       }),
     });
     conversationDraft.text = '';
+    conversationDraft.attachmentUrls = '';
     selectedConversationId.value = body.conversation.conversationId;
     await loadMockConversations();
     notice.value = `Conversation started with ${body.conversation.patientName}.`;
@@ -555,6 +592,9 @@ async function createMockConversation() {
 
 async function selectConversation(conversation: MockConversation) {
   selectedConversationId.value = conversation.conversationId;
+  conversationControls.status = conversation.status;
+  conversationControls.escalationReason = conversation.escalationReason ?? '';
+  editingMessageId.value = '';
   await loadMockConversationMessages(conversation.conversationId);
 }
 
@@ -565,13 +605,15 @@ async function sendMockConversationMessage() {
   error.value = '';
   try {
     const body = await api<{ mode: string; conversation: MockConversation; message: MockConversationMessage }>(
-      `/admin/mock/arora/conversations/${encodeURIComponent(selectedConversationId.value)}/messages`,
+      `/admin/arora/conversations/${encodeURIComponent(selectedConversationId.value)}/messages`,
       {
         method: 'POST',
         body: JSON.stringify({
           author: messageDraft.author,
           sender_name: messageDraft.senderName.trim() || (messageDraft.author === 'patient' ? 'Patient' : 'Care Team'),
+          sender_user_id: messageDraft.senderUserId.trim() || undefined,
           text: messageDraft.text.trim(),
+          attachments: parseAttachmentUrls(messageDraft.attachmentUrls),
         }),
       },
     );
@@ -580,9 +622,153 @@ async function sendMockConversationMessage() {
     ));
     mockMessages.value = [...mockMessages.value, body.message];
     messageDraft.text = '';
+    messageDraft.attachmentUrls = '';
     notice.value = 'Message added to the mock conversation.';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to add message.';
+  } finally {
+    savingMessage.value = false;
+  }
+}
+
+async function updateSelectedConversationStatus(status: unknown) {
+  if (!selectedConversationId.value || typeof status !== 'string') return;
+  updatingConversation.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: MockConversation }>(
+      `/admin/arora/conversations/${encodeURIComponent(selectedConversationId.value)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      },
+    );
+    mockConversations.value = mockConversations.value.map((conversation) => (
+      conversation.conversationId === body.conversation.conversationId ? body.conversation : conversation
+    ));
+    conversationControls.status = body.conversation.status;
+    notice.value = `Conversation marked ${body.conversation.status}.`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to update conversation status.';
+  } finally {
+    updatingConversation.value = false;
+  }
+}
+
+async function archiveSelectedConversation() {
+  if (!selectedConversationId.value) return;
+  updatingConversation.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: MockConversation }>(
+      `/admin/arora/conversations/${encodeURIComponent(selectedConversationId.value)}`,
+      { method: 'DELETE' },
+    );
+    mockConversations.value = mockConversations.value.map((conversation) => (
+      conversation.conversationId === body.conversation.conversationId ? body.conversation : conversation
+    ));
+    conversationControls.status = body.conversation.status;
+    notice.value = 'Conversation archived.';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to archive conversation.';
+  } finally {
+    updatingConversation.value = false;
+  }
+}
+
+async function escalateSelectedConversation() {
+  if (!selectedConversationId.value) return;
+  updatingConversation.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: MockConversation }>(
+      `/admin/arora/conversations/${encodeURIComponent(selectedConversationId.value)}/escalations`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason: conversationControls.escalationReason.trim() || undefined }),
+      },
+    );
+    mockConversations.value = mockConversations.value.map((conversation) => (
+      conversation.conversationId === body.conversation.conversationId ? body.conversation : conversation
+    ));
+    conversationControls.escalationReason = body.conversation.escalationReason ?? '';
+    notice.value = 'Conversation escalated to the provider network.';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to escalate conversation.';
+  } finally {
+    updatingConversation.value = false;
+  }
+}
+
+function editMessage(message: MockConversationMessage) {
+  editingMessageId.value = message.messageId;
+  messageDraft.author = message.author;
+  messageDraft.senderName = message.senderName;
+  messageDraft.senderUserId = message.senderUserId ?? '';
+  messageDraft.text = message.text;
+  messageDraft.attachmentUrls = message.attachments.map((attachment) => attachment.url).join('\n');
+}
+
+function cancelMessageEdit() {
+  editingMessageId.value = '';
+  Object.assign(messageDraft, {
+    author: 'client',
+    senderName: 'Care Team',
+    senderUserId: '',
+    text: '',
+    attachmentUrls: '',
+  });
+}
+
+async function updateMockConversationMessage() {
+  if (!selectedConversationId.value || !editingMessageId.value) return;
+  savingMessage.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: MockConversation; message: MockConversationMessage }>(
+      `/admin/arora/conversations/${encodeURIComponent(selectedConversationId.value)}/messages/${encodeURIComponent(editingMessageId.value)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ text: messageDraft.text.trim() }),
+      },
+    );
+    mockConversations.value = mockConversations.value.map((conversation) => (
+      conversation.conversationId === body.conversation.conversationId ? body.conversation : conversation
+    ));
+    mockMessages.value = mockMessages.value.map((message) => (
+      message.messageId === body.message.messageId ? body.message : message
+    ));
+    cancelMessageEdit();
+    notice.value = 'Message updated.';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to update message.';
+  } finally {
+    savingMessage.value = false;
+  }
+}
+
+async function deleteMockConversationMessage(message: MockConversationMessage) {
+  if (!selectedConversationId.value) return;
+  savingMessage.value = true;
+  notice.value = '';
+  error.value = '';
+  try {
+    const body = await api<{ deleted: boolean; conversation: MockConversation }>(
+      `/admin/arora/conversations/${encodeURIComponent(selectedConversationId.value)}/messages/${encodeURIComponent(message.messageId)}`,
+      { method: 'DELETE' },
+    );
+    mockConversations.value = mockConversations.value.map((conversation) => (
+      conversation.conversationId === body.conversation.conversationId ? body.conversation : conversation
+    ));
+    mockMessages.value = mockMessages.value.filter((item) => item.messageId !== message.messageId);
+    if (editingMessageId.value === message.messageId) cancelMessageEdit();
+    notice.value = 'Message deleted.';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to delete message.';
   } finally {
     savingMessage.value = false;
   }
@@ -968,9 +1154,16 @@ onUnmounted(() => {
             </v-col>
             <v-col cols="12" md="4">
               <div class="stat">
-                <div class="label mb-2">Conversations</div>
-                <div class="serif text-h4">{{ mockConversations.length }}</div>
-                <div class="text-caption text-medium-emphasis mt-1">Patient conversation simulations.</div>
+                <div class="label mb-2">Active conversations</div>
+                <div class="serif text-h4">{{ activeConversations.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Open patient threads.</div>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stat">
+                <div class="label mb-2">Escalated</div>
+                <div class="serif text-h4">{{ escalatedConversations.length }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">Sent to provider network.</div>
               </div>
             </v-col>
           </v-row>
@@ -981,10 +1174,10 @@ onUnmounted(() => {
                 <v-icon color="primary" icon="mdi-message-text-outline" />
                 <div>
                   <h2 class="text-h6 mb-0">Conversations</h2>
-                  <div class="text-body-2 text-medium-emphasis">Start and reply to mock Arora patient threads.</div>
+                  <div class="text-body-2 text-medium-emphasis">Start and reply to Arora patient threads.</div>
                 </div>
               </div>
-              <v-btn color="primary" prepend-icon="mdi-arrow-right" @click="navigateTo('/mock/arora/conversations')">
+              <v-btn color="primary" prepend-icon="mdi-arrow-right" @click="navigateTo('/arora/conversations')">
                 Open conversations
               </v-btn>
             </v-card>
@@ -994,7 +1187,7 @@ onUnmounted(() => {
                 <v-icon color="primary" icon="mdi-pill" />
                 <div>
                   <h2 class="text-h6 mb-0">Products</h2>
-                  <div class="text-body-2 text-medium-emphasis">Edit the mock Arora catalog used by patient ordering.</div>
+                  <div class="text-body-2 text-medium-emphasis">Edit the configured Arora catalog used by patient ordering.</div>
                 </div>
               </div>
               <v-btn variant="tonal" prepend-icon="mdi-arrow-right" @click="navigateTo('/products')">
@@ -1032,11 +1225,19 @@ onUnmounted(() => {
                   <v-text-field v-model="conversationDraft.subject" label="Subject" />
                   <v-select v-model="conversationDraft.author" :items="authorItems" label="Initial author" />
                   <v-text-field v-model="conversationDraft.senderName" label="Sender name" />
+                  <v-text-field v-model="conversationDraft.senderUserId" label="Sender user ID" />
                   <v-textarea
                     v-model="conversationDraft.text"
                     auto-grow
                     label="Initial message"
                     rows="4"
+                    variant="outlined"
+                  />
+                  <v-textarea
+                    v-model="conversationDraft.attachmentUrls"
+                    auto-grow
+                    label="Attachment URLs"
+                    rows="2"
                     variant="outlined"
                   />
                   <v-btn
@@ -1076,6 +1277,10 @@ onUnmounted(() => {
                         <div class="conversation-title">
                           <strong>{{ conversation.subject }}</strong>
                           <span>{{ conversation.patientName }}</span>
+                          <v-chip size="x-small" variant="tonal">{{ conversation.status }}</v-chip>
+                          <v-chip v-if="conversation.escalatedAt" color="warning" size="x-small" variant="tonal">
+                            escalated
+                          </v-chip>
                         </div>
                         <div class="text-body-2 text-medium-emphasis">
                           {{ conversation.lastMessageText || 'No messages yet' }}
@@ -1090,7 +1295,7 @@ onUnmounted(() => {
                     <v-empty-state
                       v-if="mockConversations.length === 0"
                       icon="mdi-message-text-outline"
-                      title="No mock conversations yet"
+                      title="No conversations yet"
                       text="Start a conversation with a patient from the admin order queue."
                     />
                   </div>
@@ -1107,6 +1312,42 @@ onUnmounted(() => {
                     </div>
                   </div>
 
+                  <div v-if="selectedConversation" class="conversation-tools mb-5">
+                    <v-select
+                      v-model="conversationControls.status"
+                      density="compact"
+                      hide-details
+                      :items="conversationStatusItems"
+                      label="Status"
+                      :loading="updatingConversation"
+                      @update:model-value="updateSelectedConversationStatus"
+                    />
+                    <v-text-field
+                      v-model="conversationControls.escalationReason"
+                      density="compact"
+                      hide-details
+                      label="Escalation reason"
+                    />
+                    <v-btn
+                      color="warning"
+                      prepend-icon="mdi-arrow-up-bold-hexagon-outline"
+                      :loading="updatingConversation"
+                      variant="tonal"
+                      @click="escalateSelectedConversation"
+                    >
+                      Escalate
+                    </v-btn>
+                    <v-btn
+                      color="error"
+                      prepend-icon="mdi-archive-outline"
+                      :loading="updatingConversation"
+                      variant="text"
+                      @click="archiveSelectedConversation"
+                    >
+                      Archive
+                    </v-btn>
+                  </div>
+
                   <div v-if="selectedConversation" class="message-list mb-5">
                     <div
                       v-for="message in mockMessages"
@@ -1119,11 +1360,39 @@ onUnmounted(() => {
                         <span class="text-caption text-medium-emphasis">{{ formatTimestamp(message.createdAt) }}</span>
                       </div>
                       <div>{{ message.text }}</div>
+                      <div v-if="message.attachments.length" class="attachment-list mt-3">
+                        <v-chip
+                          v-for="attachment in message.attachments"
+                          :key="attachment.url"
+                          size="small"
+                          prepend-icon="mdi-paperclip"
+                          variant="tonal"
+                        >
+                          {{ attachment.name || attachment.url }}
+                        </v-chip>
+                      </div>
+                      <div class="d-flex ga-2 mt-3">
+                        <v-btn size="small" prepend-icon="mdi-pencil" variant="text" @click="editMessage(message)">
+                          Edit
+                        </v-btn>
+                        <v-btn
+                          color="error"
+                          size="small"
+                          prepend-icon="mdi-delete"
+                          variant="text"
+                          @click="deleteMockConversationMessage(message)"
+                        >
+                          Delete
+                        </v-btn>
+                      </div>
                     </div>
                     <v-progress-linear v-if="messageLoading" color="primary" indeterminate />
                   </div>
 
-                  <v-form v-if="selectedConversation" @submit.prevent="sendMockConversationMessage">
+                  <v-form
+                    v-if="selectedConversation"
+                    @submit.prevent="editingMessageId ? updateMockConversationMessage() : sendMockConversationMessage()"
+                  >
                     <v-row>
                       <v-col cols="12" sm="6">
                         <v-select v-model="messageDraft.author" :items="authorItems" label="Reply as" />
@@ -1132,15 +1401,27 @@ onUnmounted(() => {
                         <v-text-field v-model="messageDraft.senderName" label="Sender name" />
                       </v-col>
                     </v-row>
+                    <v-text-field v-model="messageDraft.senderUserId" :disabled="Boolean(editingMessageId)" label="Sender user ID" />
                     <v-textarea
                       v-model="messageDraft.text"
                       auto-grow
-                      label="Reply"
+                      :label="editingMessageId ? 'Updated message' : 'Reply'"
                       rows="3"
                       variant="outlined"
                     />
+                    <v-textarea
+                      v-model="messageDraft.attachmentUrls"
+                      auto-grow
+                      :disabled="Boolean(editingMessageId)"
+                      label="Attachment URLs"
+                      rows="2"
+                      variant="outlined"
+                    />
                     <v-btn color="primary" :loading="savingMessage" prepend-icon="mdi-send" type="submit">
-                      Send reply
+                      {{ editingMessageId ? 'Save message' : 'Send reply' }}
+                    </v-btn>
+                    <v-btn v-if="editingMessageId" class="ml-3" variant="text" @click="cancelMessageEdit">
+                      Cancel
                     </v-btn>
                   </v-form>
                 </v-card>

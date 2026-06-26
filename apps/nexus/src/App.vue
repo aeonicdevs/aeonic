@@ -60,6 +60,30 @@ type AroraOrder = {
 };
 
 type EntityRow = Record<string, unknown>;
+type Conversation = {
+  conversationId: string;
+  patientId: string;
+  status: string;
+  subject: string;
+  escalationReason: string | null;
+  escalatedAt: string | null;
+  messageCount: number;
+  lastMessageText: string | null;
+  lastMessageAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+};
+type ConversationMessage = {
+  messageId: string;
+  conversationId: string;
+  author: 'client' | 'patient';
+  senderUserId: string | null;
+  senderName: string;
+  text: string;
+  attachments: { url: string; name?: string; mimeType?: string; size?: number }[];
+  updatedAt: string;
+  createdAt: string;
+};
 
 type EntityPageConfig = {
   key: string;
@@ -93,6 +117,11 @@ const currentPath = ref(window.location.pathname);
 const entityLoading = ref(false);
 const entityError = ref('');
 const entityRows = ref<EntityRow[]>([]);
+const selectedConversationId = ref('');
+const conversationMessages = ref<ConversationMessage[]>([]);
+const conversationMessageLoading = ref(false);
+const savingConversation = ref(false);
+const conversationNotice = ref('');
 
 const entityPages: EntityPageConfig[] = [
   {
@@ -226,6 +255,17 @@ const login = reactive({
   password: '',
 });
 
+const conversationDraft = reactive({
+  subject: 'Care team',
+  text: '',
+  attachmentUrls: '',
+});
+
+const conversationMessageDraft = reactive({
+  text: '',
+  attachmentUrls: '',
+});
+
 const partnerLabel = computed(() => partner.value?.clinicName ?? 'Unconfigured clinic');
 const clinicDomainLabel = computed(() => partner.value?.clinicDomain ?? resolvedHost);
 const shipmentModeLabel = computed(() => {
@@ -236,6 +276,10 @@ const shipmentModeLabel = computed(() => {
 const latestMedicationShipment = computed(() => medicationShipment.value ?? medicationShipments.value[0] ?? null);
 const selectedProduct = computed(() => (
   aroraProducts.value.find((product) => product.clientProductId === selectedProductId.value) ?? null
+));
+const conversationRows = computed(() => entityRows.value as Conversation[]);
+const selectedConversation = computed(() => (
+  conversationRows.value.find((conversation) => conversation.conversationId === selectedConversationId.value) ?? null
 ));
 const productItems = computed(() => aroraProducts.value.map((product) => ({
   title: `${product.displayName} - ${formatCurrency(product.customerPrice)}`,
@@ -355,6 +399,26 @@ function formatDate(value: unknown) {
   }).format(date);
 }
 
+function formatTimestamp(value: unknown) {
+  if (!value) return 'No activity yet';
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function parseAttachmentUrls(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map((url) => ({ url, name: url.split('/').pop() || 'Attachment' }));
+}
+
 function formatCell(row: EntityRow, column: EntityPageConfig['columns'][number]) {
   const value = row[column.key];
   if (column.type === 'currency') {
@@ -461,11 +525,100 @@ async function loadCurrentEntityPage() {
     const body = await api<Record<string, unknown>>(page.endpoint(params));
     const rows = body[page.collectionKey];
     entityRows.value = Array.isArray(rows) ? rows as EntityRow[] : [];
+    if (page.key === 'conversations') {
+      if (!conversationRows.value.some((conversation) => conversation.conversationId === selectedConversationId.value)) {
+        selectedConversationId.value = conversationRows.value[0]?.conversationId ?? '';
+      }
+      if (selectedConversationId.value) {
+        await loadConversationMessages(selectedConversationId.value);
+      } else {
+        conversationMessages.value = [];
+      }
+    }
   } catch (err) {
     entityRows.value = [];
     entityError.value = err instanceof Error ? err.message : `Unable to load ${page.label.toLowerCase()}`;
   } finally {
     entityLoading.value = false;
+  }
+}
+
+async function loadConversationMessages(conversationId: string) {
+  if (!conversationId) {
+    conversationMessages.value = [];
+    return;
+  }
+  conversationMessageLoading.value = true;
+  entityError.value = '';
+  try {
+    const body = await api<{ mode: string; messages: ConversationMessage[] }>(
+      `/patients/arora/conversations/${encodeURIComponent(conversationId)}/messages`,
+    );
+    conversationMessages.value = body.messages;
+  } catch (err) {
+    entityError.value = err instanceof Error ? err.message : 'Unable to load conversation messages';
+  } finally {
+    conversationMessageLoading.value = false;
+  }
+}
+
+async function selectConversation(conversation: Conversation) {
+  selectedConversationId.value = conversation.conversationId;
+  await loadConversationMessages(conversation.conversationId);
+}
+
+async function createConversation() {
+  savingConversation.value = true;
+  entityError.value = '';
+  conversationNotice.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: Conversation }>('/patients/arora/conversations', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject: conversationDraft.subject.trim() || 'Care team',
+        text: conversationDraft.text.trim(),
+        attachments: parseAttachmentUrls(conversationDraft.attachmentUrls),
+      }),
+    });
+    selectedConversationId.value = body.conversation.conversationId;
+    conversationDraft.text = '';
+    conversationDraft.attachmentUrls = '';
+    await loadCurrentEntityPage();
+    conversationNotice.value = 'Conversation started.';
+  } catch (err) {
+    entityError.value = err instanceof Error ? err.message : 'Unable to start conversation';
+  } finally {
+    savingConversation.value = false;
+  }
+}
+
+async function sendConversationMessage() {
+  if (!selectedConversationId.value) return;
+  savingConversation.value = true;
+  entityError.value = '';
+  conversationNotice.value = '';
+  try {
+    const body = await api<{ mode: string; conversation: Conversation; message: ConversationMessage }>(
+      `/patients/arora/conversations/${encodeURIComponent(selectedConversationId.value)}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          text: conversationMessageDraft.text.trim(),
+          attachments: parseAttachmentUrls(conversationMessageDraft.attachmentUrls),
+        }),
+      },
+    );
+    entityRows.value = conversationRows.value.map((conversation) => (
+      conversation.conversationId === body.conversation.conversationId ? body.conversation : conversation
+    ));
+    conversationMessages.value = [...conversationMessages.value, body.message];
+    conversationMessageDraft.text = '';
+    conversationMessageDraft.attachmentUrls = '';
+    conversationNotice.value = 'Message sent.';
+  } catch (err) {
+    entityError.value = err instanceof Error ? err.message : 'Unable to send message';
+  } finally {
+    savingConversation.value = false;
   }
 }
 
@@ -782,6 +935,153 @@ onUnmounted(() => {
               </v-card>
             </v-col>
           </v-row>
+          </template>
+
+          <template v-else-if="currentEntityPage?.key === 'conversations'">
+            <v-row align="start">
+              <v-col cols="12" lg="4">
+                <v-card class="nexus-card pa-5 mb-5">
+                  <div class="label mb-3">Start conversation</div>
+                  <v-form @submit.prevent="createConversation">
+                    <v-text-field v-model="conversationDraft.subject" label="Subject" />
+                    <v-textarea
+                      v-model="conversationDraft.text"
+                      auto-grow
+                      label="Message"
+                      rows="4"
+                      variant="outlined"
+                    />
+                    <v-textarea
+                      v-model="conversationDraft.attachmentUrls"
+                      auto-grow
+                      label="Attachment URLs"
+                      rows="2"
+                      variant="outlined"
+                    />
+                    <v-btn color="primary" :loading="savingConversation" prepend-icon="mdi-message-plus-outline" type="submit">
+                      Start conversation
+                    </v-btn>
+                  </v-form>
+                </v-card>
+
+                <v-card class="nexus-card pa-5">
+                  <div class="d-flex align-center ga-3 mb-4">
+                    <v-icon color="primary" icon="mdi-forum-outline" />
+                    <div>
+                      <div class="label mb-1">Threads</div>
+                      <div class="text-body-2 text-medium-emphasis">{{ conversationRows.length }} conversations</div>
+                    </div>
+                  </div>
+                  <div class="conversation-list">
+                    <button
+                      v-for="conversation in conversationRows"
+                      :key="conversation.conversationId"
+                      class="conversation-row"
+                      :class="{ 'is-selected': conversation.conversationId === selectedConversationId }"
+                      type="button"
+                      @click="selectConversation(conversation)"
+                    >
+                      <div class="conversation-title">
+                        <strong>{{ conversation.subject }}</strong>
+                        <v-chip size="x-small" variant="tonal">{{ conversation.status }}</v-chip>
+                      </div>
+                      <div class="text-body-2 text-medium-emphasis">
+                        {{ conversation.lastMessageText || 'No messages yet' }}
+                      </div>
+                      <div class="conversation-meta mt-2">
+                        <v-chip size="small" variant="tonal">{{ conversation.messageCount }} messages</v-chip>
+                        <span>{{ formatTimestamp(conversation.lastMessageAt || conversation.updatedAt) }}</span>
+                      </div>
+                    </button>
+                  </div>
+                  <v-empty-state
+                    v-if="!entityLoading && conversationRows.length === 0"
+                    icon="mdi-message-text-outline"
+                    title="No conversations yet"
+                    text="Start a conversation with your care team."
+                  />
+                </v-card>
+              </v-col>
+
+              <v-col cols="12" lg="8">
+                <v-card class="nexus-card pa-5">
+                  <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
+                    <div>
+                      <div class="label mb-2">{{ selectedConversation?.status || 'Messages' }}</div>
+                      <div class="serif text-h5">{{ selectedConversation?.subject || 'Select a conversation' }}</div>
+                      <div v-if="selectedConversation?.escalatedAt" class="text-body-2 text-medium-emphasis">
+                        Escalated {{ formatTimestamp(selectedConversation.escalatedAt) }}
+                      </div>
+                    </div>
+                    <v-spacer />
+                    <v-btn color="primary" prepend-icon="mdi-refresh" :loading="entityLoading" variant="tonal" @click="loadCurrentEntityPage">
+                      Refresh
+                    </v-btn>
+                  </div>
+
+                  <v-alert v-if="conversationNotice" class="mb-5" type="success" variant="tonal">
+                    {{ conversationNotice }}
+                  </v-alert>
+                  <v-alert v-if="entityError" class="mb-5" type="error" variant="tonal">
+                    {{ entityError }}
+                  </v-alert>
+
+                  <div v-if="selectedConversation" class="message-list mb-5">
+                    <div
+                      v-for="message in conversationMessages"
+                      :key="message.messageId"
+                      class="message-row"
+                      :class="message.author === 'patient' ? 'is-patient' : 'is-client'"
+                    >
+                      <div class="d-flex justify-space-between ga-3 mb-1">
+                        <strong>{{ message.senderName }}</strong>
+                        <span class="text-caption text-medium-emphasis">{{ formatTimestamp(message.createdAt) }}</span>
+                      </div>
+                      <div>{{ message.text }}</div>
+                      <div v-if="message.attachments.length" class="attachment-list mt-3">
+                        <v-chip
+                          v-for="attachment in message.attachments"
+                          :key="attachment.url"
+                          size="small"
+                          prepend-icon="mdi-paperclip"
+                          variant="tonal"
+                        >
+                          {{ attachment.name || attachment.url }}
+                        </v-chip>
+                      </div>
+                    </div>
+                    <v-progress-linear v-if="conversationMessageLoading" color="primary" indeterminate />
+                  </div>
+
+                  <v-form v-if="selectedConversation" @submit.prevent="sendConversationMessage">
+                    <v-textarea
+                      v-model="conversationMessageDraft.text"
+                      auto-grow
+                      label="Message"
+                      rows="3"
+                      variant="outlined"
+                    />
+                    <v-textarea
+                      v-model="conversationMessageDraft.attachmentUrls"
+                      auto-grow
+                      label="Attachment URLs"
+                      rows="2"
+                      variant="outlined"
+                    />
+                    <v-btn color="primary" :loading="savingConversation" prepend-icon="mdi-send" type="submit">
+                      Send message
+                    </v-btn>
+                  </v-form>
+
+                  <v-empty-state
+                    v-if="!selectedConversation"
+                    icon="mdi-message-reply-text-outline"
+                    title="No thread selected"
+                    text="Choose or start a conversation."
+                  />
+                </v-card>
+              </v-col>
+            </v-row>
           </template>
 
           <template v-else-if="currentEntityPage">

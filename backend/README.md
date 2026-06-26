@@ -17,6 +17,17 @@ By default, local partner and patient accounts are stored in
 `backend/.data/aeonic.sqlite3`. Set `AEONIC_DATABASE_PATH` to use a different
 SQLite file.
 
+## Arora Client Modes
+
+`ARORA_API_MODE` selects the Arora implementation:
+
+- `mock` uses the local SQLite-backed mock client in `app/arora_mock_client.py`.
+- `live` uses the HTTP client in `app/arora_live_client.py`.
+- `dry_run` records local order intent without sending the order request.
+
+`app/main.py` should call through `app/arora_client.py` instead of importing a
+mock or live implementation directly.
+
 ## Cloudflare For SaaS
 
 The partner domain flow can create Cloudflare Custom Hostnames after the

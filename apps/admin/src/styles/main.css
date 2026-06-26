@@ -127,6 +127,13 @@ body {
   gap: 12px;
 }
 
+.conversation-tools {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .conversation-row {
   width: 100%;
   display: grid;
@@ -179,11 +186,18 @@ body {
   background: rgba(var(--v-theme-primary), 0.08);
 }
 
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @media (max-width: 760px) {
   .order-row,
   .product-row,
   .mock-grid,
-  .conversation-row {
+  .conversation-row,
+  .conversation-tools {
     grid-template-columns: 1fr;
   }
 
