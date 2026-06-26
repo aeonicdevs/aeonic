@@ -9,6 +9,8 @@ from typing import Any, Literal
 from app.arora_client import AroraClientError, AroraNotFoundError, AroraValidationError
 
 
+# Before changing endpoint paths, payloads, or response normalization here, read
+# docs/arora/README.md and the copied Arora examples under docs/arora/.
 # Real Arora HTTP integration lives here. Do not add SQLite-backed fallback
 # behavior to this class; if a feature needs local simulation, implement the
 # matching method in MockAroraClient and keep this class focused on /v2/client
