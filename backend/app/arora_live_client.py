@@ -65,16 +65,19 @@ class LiveAroraClient:
         patient_id: str | None = None,
         status: str | None = None,
         updated_since: str | None = None,
+        activity_since: str | None = None,
         limit: int = 200,
         include_admin: bool = False,
     ) -> list[dict[str, Any]]:
-        query: dict[str, str | int] = {"limit": limit}
+        query: dict[str, str | int] = {"limit": _bounded_limit(limit)}
         if patient_id:
             query["patientId"] = patient_id
         if status:
             query["status"] = status
         if updated_since:
             query["updatedSince"] = updated_since
+        elif activity_since:
+            query["activitySince"] = activity_since
         response = self._request("GET", "/v2/client/conversations", query=query)
         return _collection(response, "conversations")
 
@@ -82,31 +85,12 @@ class LiveAroraClient:
         self,
         *,
         patient_id: str,
-        subject: str = "Care team",
-        author: Literal["client", "patient"] = "client",
-        sender_name: str | None = None,
-        sender_user_id: str | None = None,
-        text: str | None = None,
-        attachments: list[dict[str, Any]] | None = None,
-        include_admin: bool = False,
     ) -> dict[str, Any]:
         response = self._request("POST", "/v2/client/conversations", {"patientId": patient_id})
         conversation = _entity(response, "conversation")
         conversation_id = str(conversation.get("conversationId") or conversation.get("id") or "")
         if not conversation_id:
             raise AroraClientError("Arora did not return a conversation ID")
-        if text is not None or attachments:
-            self.create_message(
-                conversation_id,
-                author=author,
-                sender_name=sender_name,
-                sender_user_id=sender_user_id,
-                text=text,
-                attachments=attachments or [],
-                patient_id=patient_id if author == "patient" else None,
-                include_admin=include_admin,
-            )
-            return self.get_conversation(conversation_id)
         return conversation
 
     def get_conversation(
@@ -151,7 +135,7 @@ class LiveAroraClient:
         )
 
     def list_messages(self, conversation_id: str, *, patient_id: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
-        query: dict[str, int] = {"limit": limit}
+        query: dict[str, int] = {"limit": _bounded_limit(limit)}
         response = self._request("GET", f"/v2/client/conversations/{_quote(conversation_id)}/messages", query=query)
         return _collection(response, "messages")
 
@@ -168,18 +152,18 @@ class LiveAroraClient:
         self,
         conversation_id: str,
         *,
-        author: Literal["client", "patient"],
-        sender_name: str | None,
+        author: Literal["client", "patient"] = "client",
+        sender_name: str | None = None,
         sender_user_id: str | None = None,
-        text: str | None,
-        attachments: list[dict[str, Any]],
+        text: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
         patient_id: str | None = None,
         include_admin: bool = False,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "author": author,
             "text": text,
-            "attachments": attachments,
+            "attachments": attachments or [],
         }
         if author == "patient":
             if patient_id:
@@ -257,6 +241,10 @@ class LiveAroraClient:
 
 def _quote(value: str) -> str:
     return urllib.parse.quote(value, safe="")
+
+
+def _bounded_limit(value: int) -> int:
+    return max(1, min(int(value), 200))
 
 
 def _without_empty(payload: dict[str, Any]) -> dict[str, Any]:

@@ -403,6 +403,7 @@ class MockAroraClient:
         patient_id: str | None = None,
         status: str | None = None,
         updated_since: str | None = None,
+        activity_since: str | None = None,
         limit: int = 200,
         include_admin: bool = False,
     ) -> list[dict[str, Any]]:
@@ -414,24 +415,18 @@ class MockAroraClient:
         if status:
             conditions.append("conversations.status = ?")
             params.append(_normalize_conversation_status(status))
-        if updated_since:
+        since = updated_since or activity_since
+        if since:
             conditions.append("conversations.updated_at >= ?")
-            params.append(updated_since)
+            params.append(since)
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        rows = self.db.execute(f"{_conversation_list_query(where_clause)} LIMIT ?", (*params, limit)).fetchall()
+        rows = self.db.execute(f"{_conversation_list_query(where_clause)} LIMIT ?", (*params, _bounded_limit(limit))).fetchall()
         return [_public_conversation(row, include_admin=include_admin) for row in rows]
 
     def create_conversation(
         self,
         *,
         patient_id: str,
-        subject: str = "Care team",
-        author: Literal["client", "patient"] = "client",
-        sender_name: str | None = None,
-        sender_user_id: str | None = None,
-        text: str | None = None,
-        attachments: list[dict[str, Any]] | None = None,
-        include_admin: bool = False,
     ) -> dict[str, Any]:
         patient = self.db.execute(
             """
@@ -454,19 +449,9 @@ class MockAroraClient:
             )
             VALUES (?, ?, ?, 'active', ?, ?, ?)
             """,
-            (conversation_id, patient["partner_id"], patient["id"], subject.strip() or "Care team", now, now),
+            (conversation_id, patient["partner_id"], patient["id"], "Care team", now, now),
         )
-        if text is not None or attachments:
-            self.create_message(
-                conversation_id,
-                author=author,
-                sender_name=sender_name,
-                sender_user_id=sender_user_id,
-                text=text,
-                attachments=attachments or [],
-                patient_id=patient["id"] if author == "patient" else None,
-            )
-        return self.get_conversation(conversation_id, patient_id=patient_id if not include_admin else None, include_admin=include_admin)
+        return self.get_conversation(conversation_id, patient_id=patient_id)
 
     def get_conversation(
         self,
@@ -530,7 +515,7 @@ class MockAroraClient:
             ORDER BY created_at ASC
             LIMIT ?
             """,
-            (conversation_id, limit),
+            (conversation_id, _bounded_limit(limit)),
         ).fetchall()
         return [_public_message(row) for row in rows]
 
@@ -541,11 +526,11 @@ class MockAroraClient:
         self,
         conversation_id: str,
         *,
-        author: Literal["client", "patient"],
-        sender_name: str | None,
+        author: Literal["client", "patient"] = "client",
+        sender_name: str | None = None,
         sender_user_id: str | None = None,
-        text: str | None,
-        attachments: list[dict[str, Any]],
+        text: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
         patient_id: str | None = None,
         include_admin: bool = False,
     ) -> dict[str, Any]:
@@ -553,7 +538,7 @@ class MockAroraClient:
         if patient_id is not None and conversation["patientId"] != patient_id:
             raise AroraValidationError("patientId does not match the conversation patient")
 
-        normalized_attachments = _normalize_message_attachments(attachments)
+        normalized_attachments = _normalize_message_attachments(attachments or [])
         normalized_text = _normalize_message_text(text, normalized_attachments)
         normalized_sender_name = (sender_name or "").strip()
         if not normalized_sender_name:
@@ -840,7 +825,6 @@ def _public_conversation(conversation: sqlite3.Row, *, include_admin: bool = Fal
         "conversationId": conversation["id"],
         "patientId": conversation["patient_id"],
         "status": conversation["status"],
-        "subject": conversation["subject"],
         "escalationReason": conversation["escalation_reason"],
         "escalatedAt": conversation["escalated_at"],
         "messageCount": conversation["message_count"],
@@ -890,6 +874,10 @@ def _normalize_conversation_status(value: str) -> str:
     if status not in {"active", "closed", "archived"}:
         raise AroraValidationError("Conversation status must be active, closed, or archived")
     return status
+
+
+def _bounded_limit(value: int) -> int:
+    return max(1, min(int(value), 200))
 
 
 def _normalize_message_attachments(attachments: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.arora_client import (
     AroraClientError,
@@ -91,8 +91,9 @@ class AdminMedicationShipmentStatusUpdate(BaseModel):
 
 
 class AdminMockConversationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     patient_id: str = Field(min_length=1)
-    subject: str = Field(default="Care team", min_length=1)
     text: str | None = None
     author: Literal["client", "patient"] = "client"
     sender_name: str = Field(default="Care Team", min_length=1)
@@ -101,6 +102,8 @@ class AdminMockConversationCreate(BaseModel):
 
 
 class AdminMockConversationMessageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     author: Literal["client", "patient"] = "client"
     sender_name: str = Field(default="Care Team", min_length=1)
     sender_user_id: str | None = None
@@ -110,24 +113,33 @@ class AdminMockConversationMessageCreate(BaseModel):
 
 
 class ConversationStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     status: Literal["active", "closed", "archived"]
 
 
 class ConversationEscalationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     reason: str | None = None
 
 
 class ConversationMessageUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     text: str = Field(min_length=1)
 
 
 class PatientConversationCreate(BaseModel):
-    subject: str = Field(default="Care team", min_length=1)
+    model_config = ConfigDict(extra="forbid")
+
     text: str | None = None
     attachments: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PatientConversationMessageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     text: str | None = None
     attachments: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -1805,14 +1817,19 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
             if patient is None:
                 raise HTTPException(status_code=401, detail="Invalid bearer token")
-            conversation = _arora_client(db).create_conversation(
-                patient_id=patient_id,
-                subject=payload.subject,
-                author="patient",
-                sender_name=patient["name"],
-                text=payload.text,
-                attachments=payload.attachments,
-            )
+            arora_client = _arora_client(db)
+            conversation = arora_client.create_conversation(patient_id=patient_id)
+            conversation_id = str(conversation.get("conversationId") or conversation.get("id") or "")
+            if payload.text is not None or payload.attachments:
+                result = arora_client.create_message(
+                    conversation_id,
+                    author="patient",
+                    sender_name=patient["name"],
+                    text=payload.text,
+                    attachments=payload.attachments,
+                    patient_id=patient_id,
+                )
+                conversation = result["conversation"]
             return {"mode": _arora_mode(), "conversation": conversation}
 
     @app.get("/patients/arora/conversations/{conversation_id}", tags=["patients"])
@@ -2128,20 +2145,26 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     @app.post("/admin/mock/arora/conversations", tags=["admin"])
     def admin_arora_conversation_create(payload: AdminMockConversationCreate) -> dict[str, object]:
         patient_id = payload.patient_id.strip()
-        subject = payload.subject.strip() or "Care team"
         sender_name = payload.sender_name.strip() or ("Patient" if payload.author == "patient" else "Care Team")
 
         with _connect(resolved_database_path) as db:
-            conversation = _arora_client(db).create_conversation(
-                patient_id=patient_id,
-                subject=subject,
-                author=payload.author,
-                sender_name=sender_name,
-                sender_user_id=payload.sender_user_id,
-                text=payload.text,
-                attachments=payload.attachments,
-                include_admin=True,
-            )
+            arora_client = _arora_client(db)
+            conversation = arora_client.create_conversation(patient_id=patient_id)
+            conversation_id = str(conversation.get("conversationId") or conversation.get("id") or "")
+            if payload.text is not None or payload.attachments:
+                result = arora_client.create_message(
+                    conversation_id,
+                    author=payload.author,
+                    sender_name=sender_name,
+                    sender_user_id=payload.sender_user_id,
+                    text=payload.text,
+                    attachments=payload.attachments,
+                    patient_id=patient_id if payload.author == "patient" else None,
+                    include_admin=True,
+                )
+                conversation = result["conversation"]
+            else:
+                conversation = arora_client.get_conversation(conversation_id, include_admin=True)
             return {
                 "mode": _arora_mode(),
                 "conversation": conversation,

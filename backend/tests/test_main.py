@@ -493,7 +493,6 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
         "/admin/mock/arora/conversations",
         json={
             "patient_id": patient_id,
-            "subject": "Care follow-up",
             "text": "Hello from the care team.",
             "author": "client",
             "sender_name": "Care Team",
@@ -503,7 +502,7 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
     conversation = created.json()["conversation"]
     assert conversation["patientId"] == patient_id
     assert conversation["patientName"] == "Mira Chen"
-    assert conversation["subject"] == "Care follow-up"
+    assert "subject" not in conversation
     assert conversation["messageCount"] == 1
     assert conversation["lastMessageText"] == "Hello from the care team."
 
@@ -601,10 +600,68 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
     patient_created = client.post(
         "/patients/arora/conversations",
         headers={"Authorization": f"Bearer {patient_token}"},
-        json={"subject": "Billing question", "text": "Can you confirm this order?"},
+        json={"text": "Can you confirm this order?"},
     )
     assert patient_created.status_code == 200
-    assert patient_created.json()["conversation"]["subject"] == "Billing question"
+    assert "subject" not in patient_created.json()["conversation"]
+
+    unsupported_subject = client.post(
+        "/patients/arora/conversations",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={"subject": "Billing question", "text": "Can you confirm this order?"},
+    )
+    assert unsupported_subject.status_code == 422
+
+    admin_unsupported_subject = client.post(
+        "/admin/mock/arora/conversations",
+        json={
+            "patient_id": patient_id,
+            "subject": "Care follow-up",
+            "text": "Hello from the care team.",
+        },
+    )
+    assert admin_unsupported_subject.status_code == 422
+
+
+def test_live_arora_conversation_create_uses_documented_payload(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ARORA_API_MODE", "live")
+    monkeypatch.setenv("ARORA_API_KEY", "test-arora-key")
+    client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
+    suffix = uuid4().hex[:8]
+    patient_token, patient_id = _create_patient_session(client, suffix)
+    calls = []
+
+    def fake_arora_api_request(self, method, path, payload=None, query=None):
+        calls.append({"method": method, "path": path, "payload": payload, "query": query})
+        if method == "POST" and path == "/v2/client/conversations":
+            return {"conversation": {"conversationId": "conv_123", "patientId": patient_id, "status": "active"}}
+        if method == "POST" and path == "/v2/client/conversations/conv_123/messages":
+            return {"message": {"messageId": "msg_123", "conversationId": "conv_123", "text": payload["text"]}}
+        if method == "GET" and path == "/v2/client/conversations/conv_123":
+            return {"conversation": {"conversationId": "conv_123", "patientId": patient_id, "status": "active"}}
+        raise AssertionError(f"Unexpected Arora call {method} {path}")
+
+    monkeypatch.setattr(LiveAroraClient, "_request", fake_arora_api_request)
+
+    response = client.post(
+        "/patients/arora/conversations",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={"text": "Can you confirm this order?"},
+    )
+
+    assert response.status_code == 200
+    assert calls[0] == {
+        "method": "POST",
+        "path": "/v2/client/conversations",
+        "payload": {"patientId": patient_id},
+        "query": None,
+    }
+    assert "subject" not in calls[0]["payload"]
+    assert calls[1]["payload"] == {
+        "author": "patient",
+        "patientId": patient_id,
+        "text": "Can you confirm this order?",
+    }
 
 
 def test_partner_domain_verification_includes_dns_record(tmp_path) -> None:

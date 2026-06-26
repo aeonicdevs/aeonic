@@ -56,7 +56,6 @@ type MockConversation = {
   patientName: string;
   patientEmail: string;
   status: string;
-  subject: string;
   escalationReason: string | null;
   escalatedAt: string | null;
   messageCount: number;
@@ -169,7 +168,6 @@ const productDraft = reactive({
 
 const conversationDraft = reactive({
   patientId: '',
-  subject: 'Care team',
   text: '',
   author: 'client' as MockAuthor,
   senderName: 'Care Team',
@@ -560,8 +558,7 @@ async function createMockConversation() {
       method: 'POST',
       body: JSON.stringify({
         patient_id: conversationDraft.patientId,
-        subject: conversationDraft.subject.trim() || 'Care team',
-        text: conversationDraft.text.trim(),
+        text: conversationDraft.text.trim() || undefined,
         author: conversationDraft.author,
         sender_name: conversationDraft.senderName.trim() || 'Care Team',
         sender_user_id: conversationDraft.senderUserId.trim() || undefined,
@@ -1208,7 +1205,6 @@ onUnmounted(() => {
                       <v-list-item v-bind="props" :subtitle="item.raw.subtitle" />
                     </template>
                   </v-select>
-                  <v-text-field v-model="conversationDraft.subject" label="Subject" />
                   <v-select v-model="conversationDraft.author" :items="authorItems" label="Initial author" />
                   <v-text-field v-model="conversationDraft.senderName" label="Sender name" />
                   <v-text-field v-model="conversationDraft.senderUserId" label="Sender user ID" />
@@ -1261,8 +1257,8 @@ onUnmounted(() => {
                     >
                       <div>
                         <div class="conversation-title">
-                          <strong>{{ conversation.subject }}</strong>
-                          <span>{{ conversation.patientName }}</span>
+                          <strong>{{ conversation.patientName }}</strong>
+                          <span>{{ conversation.patientEmail }}</span>
                           <v-chip size="x-small" variant="tonal">{{ conversation.status }}</v-chip>
                           <v-chip v-if="conversation.escalatedAt" color="warning" size="x-small" variant="tonal">
                             escalated
@@ -1291,7 +1287,7 @@ onUnmounted(() => {
                   <div class="d-flex align-center ga-3 mb-5">
                     <v-icon color="primary" icon="mdi-message-reply-text-outline" />
                     <div>
-                      <h2 class="text-h6 mb-0">{{ selectedConversation?.subject || 'Messages' }}</h2>
+                      <h2 class="text-h6 mb-0">{{ selectedConversation?.patientName || 'Messages' }}</h2>
                       <div class="text-body-2 text-medium-emphasis">
                         {{ selectedConversation ? selectedConversation.patientEmail : 'Select a conversation to view messages.' }}
                       </div>
