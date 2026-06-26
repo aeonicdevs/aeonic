@@ -64,7 +64,6 @@ type Conversation = {
   conversationId: string;
   patientId: string;
   status: string;
-  subject: string;
   escalationReason: string | null;
   escalatedAt: string | null;
   messageCount: number;
@@ -202,7 +201,6 @@ const entityPages: EntityPageConfig[] = [
     collectionKey: 'conversations',
     columns: [
       { key: 'conversationId', title: 'Conversation ID' },
-      { key: 'subject', title: 'Subject' },
       { key: 'status', title: 'Status', type: 'status' },
       { key: 'lastMessageText', title: 'Last message' },
       { key: 'updatedAt', title: 'Updated', type: 'date' },
@@ -256,7 +254,6 @@ const login = reactive({
 });
 
 const conversationDraft = reactive({
-  subject: 'Care team',
   text: '',
   attachmentUrls: '',
 });
@@ -280,6 +277,9 @@ const selectedProduct = computed(() => (
 const conversationRows = computed(() => entityRows.value as Conversation[]);
 const selectedConversation = computed(() => (
   conversationRows.value.find((conversation) => conversation.conversationId === selectedConversationId.value) ?? null
+));
+const selectedConversationTitle = computed(() => (
+  selectedConversation.value ? formatConversationTitle(selectedConversation.value) : 'Select a conversation'
 ));
 const productItems = computed(() => aroraProducts.value.map((product) => ({
   title: `${product.displayName} - ${formatCurrency(product.customerPrice)}`,
@@ -409,6 +409,10 @@ function formatTimestamp(value: unknown) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date);
+}
+
+function formatConversationTitle(conversation: Conversation) {
+  return `Conversation ${conversation.conversationId.slice(-8)}`;
 }
 
 function parseAttachmentUrls(value: string) {
@@ -575,7 +579,6 @@ async function createConversation() {
     const body = await api<{ mode: string; conversation: Conversation }>('/patients/arora/conversations', {
       method: 'POST',
       body: JSON.stringify({
-        subject: conversationDraft.subject.trim() || 'Care team',
         text: conversationDraft.text.trim(),
         attachments: parseAttachmentUrls(conversationDraft.attachmentUrls),
       }),
@@ -943,7 +946,6 @@ onUnmounted(() => {
                 <v-card class="nexus-card pa-5 mb-5">
                   <div class="label mb-3">Start conversation</div>
                   <v-form @submit.prevent="createConversation">
-                    <v-text-field v-model="conversationDraft.subject" label="Subject" />
                     <v-textarea
                       v-model="conversationDraft.text"
                       auto-grow
@@ -982,7 +984,7 @@ onUnmounted(() => {
                       @click="selectConversation(conversation)"
                     >
                       <div class="conversation-title">
-                        <strong>{{ conversation.subject }}</strong>
+                        <strong>{{ formatConversationTitle(conversation) }}</strong>
                         <v-chip size="x-small" variant="tonal">{{ conversation.status }}</v-chip>
                       </div>
                       <div class="text-body-2 text-medium-emphasis">
@@ -1008,7 +1010,7 @@ onUnmounted(() => {
                   <div class="d-flex flex-column flex-sm-row align-sm-center ga-3 mb-5">
                     <div>
                       <div class="label mb-2">{{ selectedConversation?.status || 'Messages' }}</div>
-                      <div class="serif text-h5">{{ selectedConversation?.subject || 'Select a conversation' }}</div>
+                      <div class="serif text-h5">{{ selectedConversationTitle }}</div>
                       <div v-if="selectedConversation?.escalatedAt" class="text-body-2 text-medium-emphasis">
                         Escalated {{ formatTimestamp(selectedConversation.escalatedAt) }}
                       </div>
