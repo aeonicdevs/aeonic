@@ -133,7 +133,6 @@ const routeCopy: Record<AdminRoute, { eyebrow: string; title: string; descriptio
 };
 
 const apiStatus = ref<ApiStatus>('checking');
-const apiMessage = ref('Checking API connection');
 const currentPath = ref(window.location.pathname);
 const orders = ref<MedicationShipment[]>([]);
 const products = ref<AroraProduct[]>([]);
@@ -342,10 +341,8 @@ async function loadOrders() {
       conversationDraft.patientId = patientItems.value[0].value;
     }
     apiStatus.value = 'online';
-    apiMessage.value = 'Backend API returned the admin medication queue.';
   } catch (err) {
     apiStatus.value = 'offline';
-    apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
     error.value = 'Unable to load the admin order queue.';
   } finally {
     loading.value = false;
@@ -359,10 +356,8 @@ async function loadProducts() {
     const body = await api<{ mode: string; products: AroraProduct[] }>('/admin/arora/products');
     products.value = body.products;
     apiStatus.value = 'online';
-    apiMessage.value = 'Backend API returned the product catalog.';
   } catch (err) {
     apiStatus.value = 'offline';
-    apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
     error.value = 'Unable to load products.';
   } finally {
     productLoading.value = false;
@@ -406,10 +401,8 @@ async function loadMockConversations() {
       mockMessages.value = [];
     }
     apiStatus.value = 'online';
-    apiMessage.value = 'Backend API returned Arora conversations.';
   } catch (err) {
     apiStatus.value = 'offline';
-    apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
     error.value = 'Unable to load conversations.';
   } finally {
     conversationLoading.value = false;
@@ -418,16 +411,13 @@ async function loadMockConversations() {
 
 async function checkApi() {
   apiStatus.value = 'checking';
-  apiMessage.value = `Checking ${API_BASE}/health`;
   try {
     const response = await fetch(`${API_BASE}/health`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const body = await response.json().catch(() => ({}));
+    await response.json().catch(() => ({}));
     apiStatus.value = 'online';
-    apiMessage.value = body.status === 'ok' ? 'Backend API health check passed.' : 'Backend API responded.';
   } catch (err) {
     apiStatus.value = 'offline';
-    apiMessage.value = err instanceof Error ? err.message : 'Unable to reach backend API.';
   }
 }
 
@@ -860,10 +850,6 @@ onUnmounted(() => {
             {{ item.label }}
           </v-btn>
         </nav>
-
-        <v-alert class="mb-5" :color="statusCopy.color" :icon="statusCopy.icon" variant="tonal">
-          <strong>{{ API_BASE }}</strong> - {{ apiMessage }}
-        </v-alert>
 
         <v-alert v-if="notice" class="mb-5" type="success" variant="tonal" closable @click:close="notice = ''">
           {{ notice }}
