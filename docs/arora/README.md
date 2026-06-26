@@ -5,8 +5,8 @@ Aeonic integration.
 
 ## Files
 
-- `api-reference.md` - pasted Arora endpoint documentation.
-- `response-examples.md` - pasted code examples and observed response payloads.
+- `api-reference.md` - pasted Arora endpoint documentation, request examples,
+  and observed response payloads.
 
 ## How To Capture The Docs
 
@@ -19,11 +19,10 @@ Recommended workflow:
 
 1. Open the Arora docs in a browser.
 2. Select the rendered endpoint content and copy it.
-3. Paste it into `api-reference.md` under the matching section.
+3. Paste it into `api-reference.md` under the matching endpoint section.
 4. Copy each code example that defines return values.
-5. Paste those examples into `response-examples.md` with the endpoint path as a
-   heading.
-6. Include the source URL and capture date at the top of each file when known.
+5. Paste those examples directly into the same endpoint section.
+6. Include the source URL and capture date at the top of the file when known.
 
 ## Integration Rule
 

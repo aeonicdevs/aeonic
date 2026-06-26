@@ -4,12 +4,13 @@ Source: GEN Health Developers V2 API Beta docs, copied from rendered browser tex
 Captured: 2026-06-27
 Base URL: `https://api.gen-health.app`
 
-This file is generated from a browser text paste. It currently captures endpoint paths, headers, request parameters, key details, and common errors. It does not yet include full response bodies from the code examples; add those to `response-examples.md`.
+This file is generated from browser text pastes. It captures endpoint paths, headers, request parameters, key details, common errors, Python request examples, and response payload examples copied from the rendered API docs.
 
 ## Table Of Contents
 
 - [V2 API Beta Notes](#v2-api-beta-notes)
 - [Get Started](#get-started)
+- [Common Error Responses](#common-error-responses)
 - [Patients](#patients)
   - [POST /v2/client/patients](#post-v2clientpatients)
   - [GET /v2/client/patients](#get-v2clientpatients)
@@ -140,6 +141,28 @@ When to pick Hosted Checkout or SDK
 
 Use Hosted Checkout or the SDK when GEN should run the browser checkout UI, continuation forms, uploads, and sync-visit scheduling. Use server-to-server V2 endpoints when your app owns that patient experience.
 
+## Common Error Responses
+
+Some response examples in the rendered docs repeat the same generic errors across endpoints. Endpoint sections keep validation and not-found examples when they explain request shape or remediation; these boilerplate errors are summarized here instead of repeated under every endpoint.
+
+### 401 Response
+
+```json
+{
+  "success": false,
+  "error": "API key required or invalid."
+}
+```
+
+### 405 Response
+
+```json
+{
+  "success": false,
+  "error": "Method not allowed. Use the documented HTTP method for this endpoint."
+}
+```
+
 ## Patients
 
 ### POST /v2/client/patients
@@ -184,6 +207,65 @@ Create a patient record, or update and reuse an existing patient on the same cli
 - Existing patient belongs to another client. Remediation: use a patient tied to your client.
 - If you need an order, use the Create consult order or Create lab order API endpoint instead.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patient": {
+            "email": "jane@example.com",
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "phone": "5551234567",
+            "partnerPatientId": "partner_001",
+            "dateOfBirth": "1990-05-15",
+            "sexAtBirth": "female",
+            "address": {
+                "street1": "123 Main Street",
+                "city": "Austin",
+                "state": "TX",
+                "zip": "78701",
+            },
+            "customFields": {"referralSource": "web"},
+        },
+        "send_email": False,
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "message": "Patient created successfully",
+  "data": {
+    "patientId": "abc123",
+    "partnerPatientId": "partner_001",
+    "status": "pending",
+    "emailSent": false,
+    "magicLink": "https://app.gen-health.app/magic-login?email=jane%40example.com&token=a1b2c3..."
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient profile incomplete. Remediation: provide patient.email, firstName, lastName, phone, dateOfBirth, and address.street1/city/state/zip."
+}
+```
+
 ### GET /v2/client/patients
 
 **List client patients**
@@ -213,6 +295,84 @@ Without email: list all patients for this client (Users) with optional paginatio
 - API key required or invalid. Remediation: provide valid X-API-Key.
 - Patient not found for this client. Remediation: use an email for a patient on this client, or GET /clientPatients/:patientId.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/patients",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patients": [
+      {
+        "patientId": "abc123",
+        "partnerPatientId": "partner_001",
+        "status": "active",
+        "requiresOnboarding": false,
+        "firstName": "Jane",
+        "lastName": "Smith",
+        "fullName": "Jane Smith",
+        "email": "jane@example.com",
+        "phone": "5551234567",
+        "phoneNumber": "+15551234567",
+        "dateOfBirth": "1990-05-15",
+        "sexAtBirth": "Female",
+        "genderIdentity": "Woman",
+        "languagePreference": "english",
+        "address": {
+          "street1": "123 Main St",
+          "street2": "Apt 4B",
+          "city": "Austin",
+          "state": "TX",
+          "zip": "78701"
+        },
+        "treatmentProgram": "weight-loss",
+        "medicationDuration": "3-months",
+        "allergies": ["penicillin"],
+        "currentMedications": ["aspirin"],
+        "weightJourney": {
+          "currentWeight": 200,
+          "height": 68,
+          "goalWeight": 180
+        },
+        "customFields": {
+          "memberNumber": "M-42"
+        },
+        "createdAt": "2026-01-10T12:00:00.000Z",
+        "updatedAt": "2026-03-01T08:30:00.000Z"
+      }
+    ],
+    "pagination": {
+      "limit": 100,
+      "hasMore": false,
+      "nextCursor": null
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient not found for this client. Remediation: use an email for a patient on this client, or GET /clientPatients/:patientId."
+}
+```
+
 ### GET /v2/client/patients/:patientId
 
 **Get patient detail**
@@ -232,6 +392,77 @@ Fetch one patient profile by patientId or partnerPatientId. Equivalent to GET /c
 **Common Errors And Remediation**
 
 - Patient not found for client. Remediation: use patientId or partnerPatientId values returned by the client patients endpoints.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/patients/:patientId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patient": {
+      "patientId": "abc123",
+      "partnerPatientId": "partner_001",
+      "status": "active",
+      "requiresOnboarding": false,
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "fullName": "Jane Smith",
+      "email": "jane@example.com",
+      "phone": "5551234567",
+      "phoneNumber": "+15551234567",
+      "dateOfBirth": "1990-05-15",
+      "sexAtBirth": "Female",
+      "genderIdentity": "Woman",
+      "languagePreference": "english",
+      "address": {
+        "street1": "123 Main St",
+        "street2": "Apt 4B",
+        "city": "Austin",
+        "state": "TX",
+        "zip": "78701"
+      },
+      "treatmentProgram": "weight-loss",
+      "medicationDuration": "3-months",
+      "allergies": ["penicillin"],
+      "currentMedications": ["aspirin"],
+      "weightJourney": {
+        "currentWeight": 200,
+        "height": 68,
+        "goalWeight": 180
+      },
+      "customFields": {
+        "memberNumber": "M-42"
+      },
+      "createdAt": "2026-01-10T12:00:00.000Z",
+      "updatedAt": "2026-03-01T08:30:00.000Z"
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient not found for client. Remediation: use patientId or partnerPatientId values returned by the client patients endpoints."
+}
+```
 
 ### PATCH /v2/client/patients/:patientId
 
@@ -276,6 +507,94 @@ Update an existing patient profile by patientId or partnerPatientId. Email canno
 - No valid fields to update. Remediation: send at least one supported mutable patient field.
 - weightJourney must be an object. Remediation: send an object such as {"height":68}.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/patients/:patientId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "firstName": "Jane",
+        "lastName": "Smith",
+        "phone": "5551234567",
+        "address": {
+            "street1": "123 Main St",
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701",
+        },
+        "customFields": {
+            "memberNumber": "M-42",
+        },
+        "weightJourney": {
+            "height": 68,
+        },
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patient": {
+      "patientId": "abc123",
+      "partnerPatientId": "partner_001",
+      "status": "active",
+      "requiresOnboarding": false,
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "fullName": "Jane Smith",
+      "email": "jane@example.com",
+      "phone": "+15551234567",
+      "phoneNumber": "+15551234567",
+      "dateOfBirth": "1990-05-15",
+      "sexAtBirth": "Female",
+      "genderIdentity": "Woman",
+      "languagePreference": "english",
+      "address": {
+        "street1": "123 Main St",
+        "street2": "",
+        "city": "Austin",
+        "state": "TX",
+        "zip": "78701"
+      },
+      "treatmentProgram": "weight-loss",
+      "medicationDuration": "3-months",
+      "allergies": ["penicillin"],
+      "currentMedications": ["aspirin"],
+      "weightJourney": {
+        "currentWeight": 200,
+        "height": 68,
+        "goalWeight": 180
+      },
+      "customFields": {
+        "memberNumber": "M-42"
+      },
+      "createdAt": "2026-01-10T12:00:00.000Z",
+      "updatedAt": "2026-03-01T08:30:00.000Z"
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "patientId is required. Remediation: include patientId in the endpoint URL."
+}
+```
+
 ### DELETE /v2/client/patients/:patientId
 
 **Archive patient**
@@ -295,6 +614,50 @@ Archive a patient profile by patientId or partnerPatientId. Sets status to archi
 **Common Errors And Remediation**
 
 - Patient not found for client. Remediation: use patientId or partnerPatientId values returned by the client patients endpoints.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.delete(
+    "https://api.gen-health.app/v2/client/patients/:patientId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patient": {
+      "patientId": "abc123",
+      "partnerPatientId": "partner_001",
+      "status": "archived",
+      "requiresOnboarding": false,
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "email": "jane@example.com",
+      "updatedAt": "2026-03-01T08:30:00.000Z"
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient not found for client. Remediation: use patientId or partnerPatientId values returned by the client patients endpoints."
+}
+```
 
 ### POST /v2/client/patients/:patientId/health-logs
 
@@ -336,6 +699,67 @@ Write dated patient health data by patientId or partnerPatientId. Accepts one lo
 - date or loggedAt is required. Remediation: send date as YYYY-MM-DD or loggedAt as an ISO timestamp.
 - Patient not found for this client. Remediation: use patientId or partnerPatientId values returned by the client patients endpoints.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients/:patientId/health-logs",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "category": "body",
+        "date": "2026-01-15",
+        "externalId": "crm-body-2026-01-15",
+        "weight": 184.2,
+        "unit": "lbs",
+        "height": 68,
+        "bodyFatPct": 24.5,
+        "source": "partner_import",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patientId": "abc123",
+    "partnerPatientId": "partner_001",
+    "healthLogs": [
+      {
+        "id": "partner_import_body_crm-body-2026-01-15",
+        "category": "body",
+        "date": "2026-01-15",
+        "loggedAt": "2026-01-15T00:00:00.000Z",
+        "weight": 184.2,
+        "loggedWeight": 184.2,
+        "currentWeight": 184.2,
+        "unit": "lbs",
+        "height": 68,
+        "bodyFatPct": 24.5,
+        "source": "partner_import"
+      }
+    ]
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "category is required. Remediation: use one of activity, nutrition, sleep, body, mind, symptom."
+}
+```
+
 ### GET /v2/client/patients/:patientId/health-logs
 
 **List patient health logs**
@@ -360,6 +784,58 @@ List dated patient health logs by patientId or partnerPatientId.
 **Common Errors And Remediation**
 
 - Patient not found for this client. Remediation: use patientId or partnerPatientId values returned by the client patients endpoints.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/patients/:patientId/health-logs",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patientId": "abc123",
+    "partnerPatientId": "partner_001",
+    "healthLogs": [
+      {
+        "id": "partner_import_body_crm-body-2026-01-15",
+        "category": "body",
+        "date": "2026-01-15",
+        "loggedAt": "2026-01-15T00:00:00.000Z",
+        "weight": 184.2,
+        "unit": "lbs",
+        "height": 68
+      }
+    ],
+    "pagination": {
+      "limit": 100,
+      "hasMore": false,
+      "nextCursor": null
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient not found for this client. Remediation: use patientId or partnerPatientId values returned by the client patients endpoints."
+}
+```
 
 ### POST /v2/client/patients/:patientId/onboarding-id
 
@@ -393,6 +869,55 @@ Upload government ID front, ID back, or selfie for a patient. Uses the same Stor
 - 415 — Unsupported image type. Use a JPEG/JPG, PNG, HEIC/HEIF, or WebP image up to 12 MB. There is no resolution limit.
 - Unable to fetch image from the provided URL.
 
+#### Python Request
+
+Multipart mode:
+
+```text
+multipart/form-data: patientId=abc123, slotKey=selfie, file=<binary>
+```
+
+URL mode:
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients/:patientId/onboarding-id",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patientId": "abc123",
+        "slotKey": "selfie",
+        "imageUrl": "https://example.com/photos/selfie.jpg",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patientId": "abc123",
+    "slotKey": "selfie"
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "415 — Unsupported Content-Type (use multipart/form-data or application/json)."
+}
+```
+
 ### POST /v2/client/patients/:patientId/continuation-sessions
 
 **Create continuation session**
@@ -414,6 +939,62 @@ Mint a short-lived GEN patient session after server-side checkout or order creat
 - `clientProductId`: Associated clientProductId when no orderId is available yet
 - `allowedOrigin`: Browser origin that will mount the continuation UI
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients/:patientId/continuation-sessions",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patientId": "abc123",
+        "orderId": "order456",
+        "allowedOrigin": "https://storefront.example.com",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patientId": "abc123",
+    "continuationSessionId": "sfps_...",
+    "continuationSessionToken": "sfpt_...",
+    "requiredActions": ["uploads", "forms", "patient_continuation"],
+    "requirementSummary": {
+      "totalForms": 2,
+      "hasForms": true,
+      "uploads": {
+        "required": true,
+        "completed": 0,
+        "remaining": 2
+      }
+    },
+    "uploadRequirements": {
+      "sessionSlotKey": "requiredPhotos",
+      "slots": [
+        {
+          "key": "idFront",
+          "uploaded": false
+        },
+        {
+          "key": "idBack",
+          "uploaded": false
+        }
+      ]
+    }
+  }
+}
+```
+
 ## Products
 
 ### GET /v2/client/categories
@@ -432,6 +1013,43 @@ List active product categories available for this client. Inactive (soft-deleted
 
 - Method not allowed. Remediation: use the List categories API endpoint with GET.
 - API key required or invalid. Remediation: provide a valid X-API-Key.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/categories",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [
+      {
+        "categoryId": "cat123",
+        "categoryName": "Weight Loss",
+        "status": "active"
+      },
+      {
+        "categoryId": "cat456",
+        "categoryName": "Skin Care",
+        "status": "active"
+      }
+    ]
+  }
+}
+```
 
 ### GET /v2/client/products
 
@@ -454,6 +1072,57 @@ List storefront-available consult products for this client. Optionally filter by
 - Method not allowed. Remediation: use the List consult products API endpoint with GET.
 - API key required or invalid. Remediation: provide a valid X-API-Key.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/products",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "products": [
+      {
+        "clientProductId": "prodX_1",
+        "productId": "prodX",
+        "sourceProductId": "prodX",
+        "productRelationship": "duplicate",
+        "name": "Client Display Name",
+        "displayName": "Client Display Name",
+        "description": "Video visit, personalized care plan, and follow-up messaging.",
+        "categories": ["clientCategoryDocId"],
+        "displayCategoryIds": ["clientCategoryDocId"],
+        "PNcategories": ["networkCategoryCodeOrId"]
+      },
+      {
+        "clientProductId": "clientA_network1_prodY",
+        "productId": "prodY",
+        "sourceProductId": null,
+        "productRelationship": "original",
+        "name": "Original Product",
+        "displayName": "Original Product",
+        "description": "Original product description.",
+        "categories": ["clientCategoryDocId"],
+        "displayCategoryIds": ["clientCategoryDocId"],
+        "PNcategories": ["networkCategoryCodeOrId"]
+      }
+    ]
+  }
+}
+```
+
 ### GET /v2/client/products/:clientProductId
 
 **Get product detail**
@@ -467,6 +1136,43 @@ List storefront-available consult products for this client. Optionally filter by
 **Parameters**
 
 - `clientProductId` _(required)_: Client product id returned by List products
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/products/:clientProductId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "product": {
+      "clientProductId": "prodX_1",
+      "productId": "prodX",
+      "sourceProductId": "prodX",
+      "productRelationship": "duplicate",
+      "name": "Client Display Name",
+      "displayName": "Client Display Name",
+      "description": "Video visit, personalized care plan, and follow-up messaging.",
+      "categories": ["clientCategoryDocId"],
+      "displayCategoryIds": ["clientCategoryDocId"],
+      "PNcategories": ["networkCategoryCodeOrId"]
+    }
+  }
+}
+```
 
 ### POST /v2/client/products
 
@@ -498,6 +1204,65 @@ Create a client-owned product or package. Packages combine active, patient-visib
 
 - Images are excluded from V2 product CRUD. Use the existing app upload path for image management.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/products",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "itemType": "package",
+        "name": "Metabolic Care Bundle",
+        "displayName": "Metabolic Care Bundle",
+        "displayDescription": "Two protocols purchased together.",
+        "customerPrice": "249.00",
+        "includedProducts": [
+            {"clientProductId": "weight_loss_protocol"},
+            {"clientProductId": "lab_review_protocol"},
+        ],
+        "status": "active",
+        "showPatient": True,
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "product": {
+      "clientProductId": "pkg_123",
+      "productId": "pkg_123",
+      "catalogScope": "client",
+      "itemType": "package",
+      "displayName": "Metabolic Care Bundle",
+      "customerPrice": 249,
+      "pricing": {
+        "amount": 249,
+        "currency": "USD"
+      },
+      "status": "active",
+      "showPatient": true,
+      "includedProducts": [
+        {
+          "clientProductId": "weight_loss_protocol",
+          "name": "Weight Loss",
+          "customerPrice": 159
+        }
+      ]
+    }
+  }
+}
+```
+
 ### PATCH /v2/client/products/:clientProductId
 
 **Update client product or package**
@@ -528,6 +1293,53 @@ Update editable client product fields. Provider-network-owned products are updat
 - Catalog ownership fields are not editable.
 - Provider-network rows only accept overlay fields available in the client Products page.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/products/:clientProductId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "displayName": "Metabolic Care Bundle",
+        "customerPrice": "229.00",
+        "status": "active",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "product": {
+      "clientProductId": "pkg_123",
+      "displayName": "Metabolic Care Bundle",
+      "customerPrice": 229,
+      "status": "active",
+      "showPatient": true,
+      "updatedAt": "2026-03-01T12:00:00.000Z"
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Image fields are not editable through the Client API."
+}
+```
+
 ### DELETE /v2/client/products/:clientProductId
 
 **Deactivate client product or package**
@@ -543,6 +1355,36 @@ Soft-delete a product or package by setting status inactive and showPatient fals
 **Parameters**
 
 - `clientProductId` _(required)_: Client product document id
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.delete(
+    "https://api.gen-health.app/v2/client/products/:clientProductId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "product": {
+      "clientProductId": "pkg_123",
+      "status": "inactive",
+      "showPatient": false
+    }
+  }
+}
+```
 
 ### GET /v2/client/products/:clientProductId/forms
 
@@ -561,6 +1403,65 @@ Preview required intake and consent forms for a catalog product before order cre
 - `clientProductId` _(required)_: Client product id returned by List products
 - `patientId`: Optional system patientId or partnerPatientId for completion status
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/products/:clientProductId/forms",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "product": {
+      "clientProductId": "clientA_network1_prodX",
+      "productId": "prodX",
+      "providerNetworkId": "network1",
+      "displayName": "Weight Loss Program"
+    },
+    "patient": {
+      "patientId": "abc123",
+      "partnerPatientId": "partner_patient_001",
+      "email": "jane@example.com"
+    },
+    "requirementSummary": {
+      "totalForms": 2,
+      "completedForms": 0,
+      "remainingForms": 2,
+      "hasForms": true,
+      "formsCompletionStatus": "pending"
+    },
+    "forms": [
+      {
+        "formKey": "provider_network:network1:intakeA",
+        "formId": "intakeA",
+        "scopeType": "provider_network",
+        "providerNetworkId": "network1",
+        "productId": "prodX",
+        "name": "Medical Intake",
+        "formType": "intake",
+        "version": 3,
+        "associationType": "product",
+        "completed": false,
+        "completionStatus": "pending",
+        "detailPath": "/v2/client/products/clientA_network1_prodX/forms/provider_network%3Anetwork1%3AintakeA?patientId=abc123"
+      }
+    ]
+  }
+}
+```
+
 ### GET /v2/client/products/:clientProductId/forms/:formKey
 
 **Get product form detail**
@@ -576,6 +1477,63 @@ Preview required intake and consent forms for a catalog product before order cre
 - `clientProductId` _(required)_: Client product id returned by List products
 - `formKey` _(required)_: Opaque form key returned by List product forms
 - `patientId`: Optional system patientId or partnerPatientId
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/products/:clientProductId/forms/:formKey",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "product": {
+      "clientProductId": "clientA_network1_prodX",
+      "productId": "prodX",
+      "providerNetworkId": "network1",
+      "displayName": "Weight Loss Program"
+    },
+    "patient": null,
+    "form": {
+      "formKey": "provider_network:network1:intakeA",
+      "formId": "intakeA",
+      "scopeType": "provider_network",
+      "providerNetworkId": "network1",
+      "name": "Medical Intake",
+      "formType": "intake",
+      "completionStatus": "pending",
+      "detailPath": "/v2/client/products/clientA_network1_prodX/forms/provider_network%3Anetwork1%3AintakeA",
+      "sections": [
+        {
+          "sectionId": "medical_history",
+          "title": "Medical history",
+          "questions": [
+            {
+              "questionId": "allergies",
+              "label": "Known allergies",
+              "type": "textarea",
+              "required": false,
+              "options": []
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
 
 ### GET /v2/client/products/forms
 
@@ -593,6 +1551,60 @@ Preview deduplicated required forms across multiple catalog products.
 
 - `clientProductIds` _(required)_: Comma-separated clientProductId values
 - `patientId`: Optional system patientId or partnerPatientId
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/products/forms",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "products": [
+      {
+        "clientProductId": "clientA_network1_prodX",
+        "productId": "prodX",
+        "providerNetworkId": "network1",
+        "displayName": "Weight Loss Program"
+      }
+    ],
+    "patient": null,
+    "requirementSummary": {
+      "totalForms": 1,
+      "completedForms": 0,
+      "remainingForms": 1,
+      "hasForms": true,
+      "formsCompletionStatus": "pending"
+    },
+    "forms": [
+      {
+        "formKey": "client:clientA:consent1",
+        "formId": "consent1",
+        "scopeType": "client",
+        "clientId": "clientA",
+        "name": "Consent",
+        "formType": "consent",
+        "coveredProductIds": ["clientA_network1_prodX", "clientA_network1_prodY"],
+        "completionStatus": "pending",
+        "detailPath": "/v2/client/products/clientA_network1_prodX/forms/client%3AclientA%3Aconsent1"
+      }
+    ]
+  }
+}
+```
 
 ## Orders
 
@@ -665,6 +1677,115 @@ Create a product order and create or reference the patient in one request. Set o
 - A patient with this email already exists. Remediation: retry with top-level patient_id or patientId instead of patient.email.
 - order.payment_status rejected (API Orders disabled). Remediation: omit it or enable API Orders.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/orders",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patient": {
+            "email": "jane@example.com",
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "phone": "5551234567",
+            "partnerPatientId": "partner_patient_001",
+            "dateOfBirth": "1990-05-15",
+            "address": {
+                "street1": "123 Main Street",
+                "city": "Austin",
+                "state": "TX",
+                "zip": "78701",
+            },
+            "customFields": {"referralSource": "web"},
+        },
+        "order": {
+            "clientProductId": "clientA_network1_prodX",
+            "amount": "200.00",
+            "couponCode": "JASON20",
+            "tracking": {
+                "source": "partner-checkout",
+                "utmSource": "jason-newsletter",
+                "utmMedium": "email",
+                "utmCampaign": "spring-launch",
+            },
+            "sendReceipt": True,
+            "customFields": {
+                "campaign": "spring_launch",
+                "crmOrderId": "crm_981",
+            },
+        },
+        "send_email": False,
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patientId": "abc123",
+    "partnerPatientId": "partner_patient_001",
+    "orderId": "order456",
+    "orderIds": ["order456"],
+    "visitId": null,
+    "chartReviewId": null,
+    "patientStatus": "pending",
+    "orderStatus": "pending_payment",
+    "orderType": "product",
+    "paymentStatus": "unpaid",
+    "paymentVerificationStatus": "not_required",
+    "paymentVerification": null,
+    "requiredActions": ["forms", "patient_continuation"],
+    "requirementSummary": {
+      "totalForms": 2,
+      "hasForms": true
+    },
+    "continuationSupported": true,
+    "duplicateOrder": false,
+    "emailSent": false,
+    "orders": [
+      {
+        "orderId": "order456",
+        "visitId": null,
+        "chartReviewId": null,
+        "clientProductId": "clientA_network1_prodX",
+        "productId": "prodX",
+        "orderType": "product",
+        "orderStatus": "pending_payment",
+        "paymentStatus": "unpaid",
+        "paymentVerificationStatus": "not_required",
+        "paymentVerification": null,
+        "amount": "200.00",
+        "customFields": {
+          "campaign": "spring_launch",
+          "crmOrderId": "crm_981"
+        },
+        "duplicateOrder": false
+      }
+    ],
+    "magicLink": "https://app.gen-health.app/magic-login?email=jane%40example.com&token=a1b2c3..."
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient profile incomplete. Remediation: provide firstName, lastName, email, phone, dateOfBirth, and address.street1/city/state/zip when creating a new patient."
+}
+```
+
 ### GET /v2/client/orders
 
 **List client orders**
@@ -692,6 +1813,83 @@ List all orders for this client. Supports filtering by patient, status, payment 
 - Patient not found for client. Remediation: use a patientId or partnerPatientId from List client patients.
 - API key required or invalid. Remediation: provide valid X-API-Key.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/orders",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "orders": [
+      {
+        "orderId": "order456",
+        "patientId": "abc123",
+        "partnerPatientId": "partner_001",
+        "clientId": "clientA",
+        "providerNetworkId": "network1",
+        "clientProductId": "clientA_network1_prodX",
+        "productId": "prodX",
+        "productName": "Weight Loss Program",
+        "displayName": "Weight Loss Program",
+        "orderType": "product",
+        "orderStatus": "pending_review",
+        "paymentStatus": "paid",
+        "paymentVerificationStatus": "not_required",
+        "amount": 19900,
+        "quantity": 1,
+        "items": [],
+        "prescriptions": [
+          {
+            "prescriptionId": "rx_123",
+            "orderId": "order456",
+            "medicationName": "Medication name",
+            "status": "sent",
+            "trackingNumber": null,
+            "createdAt": "2026-03-01T12:10:00.000Z"
+          }
+        ],
+        "reviewRequired": "async",
+        "visitId": null,
+        "customFields": {
+          "crmOrderId": "crm_981"
+        },
+        "paymentGateway": "client_api",
+        "createdAt": "2026-03-01T12:00:00.000Z",
+        "updatedAt": "2026-03-01T12:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "limit": 50,
+      "hasMore": false,
+      "nextCursor": null
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient not found for client. Remediation: use a patientId or partnerPatientId from List client patients."
+}
+```
+
 ### GET /v2/client/orders/:orderId
 
 **Get order detail**
@@ -711,6 +1909,65 @@ Fetch one order by orderId. Returns 404 if the order does not belong to this cli
 **Common Errors And Remediation**
 
 - Order not found for client. Remediation: use an orderId returned by List client orders, Create consult order, or Create lab order.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/orders/:orderId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "patientId": "abc123",
+      "partnerPatientId": "partner_001",
+      "clientProductId": "clientA_network1_prodX",
+      "orderType": "product",
+      "orderStatus": "pending_review",
+      "paymentStatus": "paid",
+      "amount": 19900,
+      "prescriptions": [
+        {
+          "prescriptionId": "rx_123",
+          "orderId": "order456",
+          "medicationName": "Medication name",
+          "status": "sent",
+          "trackingNumber": null
+        }
+      ],
+      "visitId": null,
+      "customFields": {
+        "crmOrderId": "crm_981"
+      },
+      "createdAt": "2026-03-01T12:00:00.000Z",
+      "updatedAt": "2026-03-01T12:00:00.000Z"
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Order not found for client. Remediation: use an orderId returned by List client orders, Create consult order, or Create lab order."
+}
+```
 
 ### PATCH /v2/client/orders/:orderId
 
@@ -752,6 +2009,133 @@ Cancel a client-owned order. Use DELETE for the resource-first form or PATCH wit
 - 409 transaction_id is already associated with another order.
 - 500 Unable to update order. Remediation: retry the request or contact support.
 
+#### Python Request: Cancel Order
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/orders/:orderId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "status": "cancelled",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response: Cancel Order
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "patientId": "abc123",
+      "partnerPatientId": "partner_001",
+      "clientId": "clientA",
+      "providerNetworkId": "network1",
+      "clientProductId": "clientA_network1_prodX",
+      "productId": "prodX",
+      "productName": "Weight Loss Program",
+      "displayName": "Weight Loss Program",
+      "orderType": "product",
+      "orderStatus": "cancelled",
+      "paymentStatus": "unpaid",
+      "paymentVerificationStatus": "not_required",
+      "amount": 19900,
+      "quantity": 1,
+      "items": [],
+      "reviewRequired": "async",
+      "visitId": null,
+      "customFields": {
+        "crmOrderId": "crm_981"
+      },
+      "paymentGateway": "client_api",
+      "createdAt": "2026-03-01T12:00:00.000Z",
+      "updatedAt": "2026-03-01T12:05:00.000Z"
+    }
+  }
+}
+```
+
+#### Python Request: Mark Order Paid
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/orders/:orderId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "payment_status": "paid",
+        "transaction_id": "pi_3abc123",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response: Mark Order Paid
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "patientId": "abc123",
+      "partnerPatientId": "partner_001",
+      "clientId": "clientA",
+      "providerNetworkId": "network1",
+      "clientProductId": "clientA_network1_prodX",
+      "productId": "prodX",
+      "productName": "Weight Loss Program",
+      "displayName": "Weight Loss Program",
+      "orderType": "product",
+      "orderStatus": "pending_review",
+      "paymentStatus": "paid",
+      "paymentVerificationStatus": "trusted",
+      "amount": 19900,
+      "quantity": 1,
+      "items": [],
+      "reviewRequired": "async",
+      "visitId": "order_order456",
+      "customFields": {
+        "crmOrderId": "crm_981"
+      },
+      "paymentGateway": "client_api",
+      "paymentDate": "2026-03-01T12:05:00.000Z",
+      "createdAt": "2026-03-01T12:00:00.000Z",
+      "updatedAt": "2026-03-01T12:05:00.000Z"
+    },
+    "visitId": "order_order456",
+    "chartReviewId": "order_order456",
+    "requiredActions": [],
+    "requirementSummary": {
+      "totalForms": 0,
+      "hasForms": false
+    },
+    "duplicateOrder": false
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "400 Invalid status. Remediation: use status: \"cancelled\" or payment_status: \"paid\"."
+}
+```
+
 ### DELETE /v2/client/orders/:orderId
 
 **Cancel order with DELETE**
@@ -765,6 +2149,35 @@ Cancel a client-owned order. Use DELETE for the resource-first form or PATCH wit
 **Parameters**
 
 - `orderId` _(required)_: Order ID to cancel
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.delete(
+    "https://api.gen-health.app/v2/client/orders/:orderId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "orderStatus": "cancelled"
+    }
+  }
+}
+```
 
 ### POST /v2/client/patients/:patientId/consults
 
@@ -784,6 +2197,51 @@ Compatibility product order endpoint for an existing patient. The resource-first
 - `patientId` _(required)_: System patientId or partnerPatientId
 - `order.clientProductId` _(required)_: Product clientProductId returned by List products
 - `order.payment_status`: paid or unpaid
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients/:patientId/consults",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "order": {
+            "clientProductId": "clientA_network1_prodX",
+            "payment_status": "paid",
+            "amount": "199.00",
+        },
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": "order456",
+    "patientId": "abc123",
+    "productId": "prodX",
+    "clientProductId": "clientA_network1_prodX",
+    "orderType": "product",
+    "orderStatus": "pending_forms",
+    "paymentStatus": "paid",
+    "requiredActions": [
+      {
+        "type": "forms",
+        "status": "required"
+      }
+    ]
+  }
+}
+```
 
 ## Order Forms
 
@@ -809,6 +2267,58 @@ Return the required intake and consent form manifest for an order.
 - `orderId` is required so form completion can update the order and downstream clinical records.
 - Forms may be provider-network scoped or client scoped. Use `formKey` as the opaque identifier for follow-up calls.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/orders/:orderId/forms",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "orderStatus": "pending_forms",
+      "formsCompletionStatus": "pending",
+      "clientProductId": "clientA_network1_prodX",
+      "productId": "prodX"
+    },
+    "requirementSummary": {
+      "totalForms": 2,
+      "completedForms": 0,
+      "remainingForms": 2,
+      "hasForms": true,
+      "formsCompletionStatus": "pending"
+    },
+    "forms": [
+      {
+        "formKey": "provider_network:network1:intakeA",
+        "formId": "intakeA",
+        "scopeType": "provider_network",
+        "providerNetworkId": "network1",
+        "name": "Medical Intake",
+        "formType": "intake",
+        "version": 3,
+        "completed": false,
+        "detailPath": "/v2/client/forms/provider_network%3Anetwork1%3AintakeA?orderId=order456"
+      }
+    ]
+  }
+}
+```
+
 ### GET /v2/client/orders/:orderId/forms/:formKey
 
 **Get order form detail**
@@ -825,6 +2335,53 @@ Return one required form definition for an order, including sections, questions,
 
 - `formKey` _(required)_: Opaque form key returned by list order forms
 - `orderId` _(required)_: Order returned by create consult order
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/orders/:orderId/forms/:formKey",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "form": {
+      "formKey": "provider_network:network1:intakeA",
+      "formId": "intakeA",
+      "scopeType": "provider_network",
+      "name": "Medical Intake",
+      "formType": "intake",
+      "version": 3,
+      "sections": [
+        {
+          "sectionId": "medical_history",
+          "title": "Medical history",
+          "questions": [
+            {
+              "questionId": "allergies",
+              "label": "Known allergies",
+              "type": "textarea",
+              "required": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
 
 ### POST /v2/client/orders/:orderId/forms/submissions
 
@@ -851,6 +2408,55 @@ Submit one or more order-bound form responses. The API writes deterministic subm
 - Retrying the same `orderId` + `formKey` reuses the same submissionId.
 - When all required forms are complete, a paid provider-backed order advances out of `pending_forms` and links Visit/ChartReview records when required.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/orders/:orderId/forms/submissions",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "orderId": "order456",
+        "patientId": "abc123",
+        "submissions": [
+            {
+                "formKey": "provider_network:network1:intakeA",
+                "responses": {
+                    "medical_history": {
+                        "allergies": "No known allergies",
+                    },
+                },
+            },
+        ],
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "submissions": [
+      {
+        "formKey": "provider_network:network1:intakeA",
+        "submissionId": "api_form_...",
+        "duplicate": false
+      }
+    ],
+    "formsCompletionStatus": "complete",
+    "visitId": "order_order456",
+    "chartReviewId": "order_order456"
+  }
+}
+```
+
 ### GET /v2/client/forms
 
 **List order forms by query**
@@ -868,6 +2474,54 @@ Compatibility form manifest endpoint for an order. The nested /orders/:orderId/f
 - `orderId` _(required)_: Order returned by Create product order or Create lab order
 - `patientId`: Optional system patientId or partnerPatientId; must match the order patient
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/forms",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "formsCompletionStatus": "pending"
+    },
+    "patient": {
+      "patientId": "abc123",
+      "partnerPatientId": "partner_patient_001"
+    },
+    "requirementSummary": {
+      "totalForms": 1,
+      "remainingForms": 1,
+      "formsCompletionStatus": "pending"
+    },
+    "forms": [
+      {
+        "formKey": "provider_network:network1:intakeA",
+        "formId": "intakeA",
+        "scopeType": "provider_network",
+        "name": "Medical Intake",
+        "completionStatus": "pending",
+        "detailPath": "/v2/client/forms/provider_network%3Anetwork1%3AintakeA?orderId=order456"
+      }
+    ]
+  }
+}
+```
+
 ### GET /v2/client/forms/:formKey
 
 **Get order form detail by query**
@@ -884,6 +2538,58 @@ Compatibility form detail endpoint for an order. The nested /orders/:orderId/for
 
 - `formKey` _(required)_: Opaque form key returned by List order forms
 - `orderId` _(required)_: Order returned by Create product order or Create lab order
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/forms/:formKey",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "formsCompletionStatus": "pending"
+    },
+    "patient": {
+      "patientId": "abc123",
+      "partnerPatientId": "partner_patient_001"
+    },
+    "form": {
+      "formKey": "provider_network:network1:intakeA",
+      "formId": "intakeA",
+      "scopeType": "provider_network",
+      "name": "Medical Intake",
+      "sections": [
+        {
+          "sectionId": "medical_history",
+          "questions": [
+            {
+              "questionId": "allergies",
+              "label": "Known allergies",
+              "type": "textarea",
+              "required": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
 
 ### POST /v2/client/forms/submissions
 
@@ -904,6 +2610,65 @@ Compatibility form submission endpoint. Send orderId in the body; the nested /or
 - `patientId` _(required)_: System patientId or partnerPatientId; must match the order patient
 - `submissions[].formKey` _(required)_: Opaque form key returned by List order forms
 - `submissions[].responses` _(required)_: Section-keyed object: { [sectionId]: { [questionId]: value } }
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/forms/submissions",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "orderId": "order456",
+        "patientId": "abc123",
+        "submissions": [
+            {
+                "formKey": "provider_network:network1:intakeA",
+                "responses": {
+                    "medical_history": {
+                        "allergies": "No known allergies",
+                    },
+                },
+            },
+        ],
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "orderId": "order456",
+      "formsCompletionStatus": "complete"
+    },
+    "patient": {
+      "patientId": "abc123",
+      "partnerPatientId": "partner_patient_001"
+    },
+    "submissions": [
+      {
+        "formKey": "provider_network:network1:intakeA",
+        "formId": "intakeA",
+        "scopeType": "provider_network",
+        "submissionId": "api_form_order456_provider_network_network1_intakeA",
+        "duplicate": false
+      }
+    ],
+    "formsCompletionStatus": "complete",
+    "visitId": "order_order456",
+    "chartReviewId": "order_order456"
+  }
+}
+```
 
 ## Labs
 
@@ -927,6 +2692,39 @@ List storefront-available lab products for this client.
 
 - Method not allowed. Remediation: use the List lab products API endpoint with GET.
 - API key required or invalid. Remediation: provide a valid X-API-Key.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/labs",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "labs": [
+      {
+        "clientProductId": "clientA_network1_labY",
+        "productId": "labY",
+        "name": "Comprehensive Lab Panel",
+        "displayName": "Comprehensive Lab Panel"
+      }
+    ]
+  }
+}
+```
 
 ### POST /v2/client/patients/:patientId/labs/submissions
 
@@ -962,6 +2760,58 @@ Upload lab results as JSON biomarkers or a PDF file for a client-owned patient. 
 - Patient not found for client. Remediation: use a patientId or partnerPatientId returned by the client patients endpoints.
 - Only PDF uploads are supported for file uploads. Remediation: send application/pdf in multipart or set mimeType to application/pdf for fileBase64.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients/:patientId/labs/submissions",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patientId": "partner_patient_001",
+        "labName": "CMP",
+        "resultDate": "2026-03-01",
+        "notes": "Fasting sample collected at clinic",
+        "results": [
+            {
+                "biomarker": "Glucose",
+                "value": "92",
+                "unit": "mg/dL",
+            },
+        ],
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "documentId": "doc_123",
+    "patientId": "abc123",
+    "partnerPatientId": "partner_patient_001",
+    "type": "Lab Results",
+    "name": "CMP - 2026-03-01"
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient not found for client. Remediation: use a patientId or partnerPatientId returned by the client patients endpoints."
+}
+```
+
 ### GET /v2/client/labs/:clientProductId
 
 **Get lab detail**
@@ -975,6 +2825,34 @@ Upload lab results as JSON biomarkers or a PDF file for a client-owned patient. 
 **Parameters**
 
 - `clientProductId` _(required)_: Lab clientProductId returned by List labs
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/labs/:clientProductId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "lab": {
+      "clientProductId": "clientA_network1_labY"
+    }
+  }
+}
+```
 
 ### POST /v2/client/labs/requests
 
@@ -995,6 +2873,47 @@ Compatibility lab order endpoint for callers already using the lab-specific rout
 - `patient`: Patient payload when creating the patient inline
 - `order.clientProductId` _(required)_: Lab clientProductId returned by List labs
 - `order.payment_status`: paid or unpaid
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/labs/requests",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patient_id": "abc123",
+        "order": {
+            "clientProductId": "clientA_network1_labY",
+            "payment_status": "paid",
+            "amount": "150.00",
+        },
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": "order456",
+    "patientId": "abc123",
+    "productId": "labY",
+    "clientProductId": "clientA_network1_labY",
+    "orderType": "lab",
+    "orderStatus": "pending",
+    "paymentStatus": "paid",
+    "requiredActions": []
+  }
+}
+```
 
 ## Visits
 
@@ -1063,6 +2982,82 @@ Create a visit for a new patient, or for an existing patient referenced by patie
 - Invalid visit data. Remediation: verify visit fields and retry.
 - Provider slot unavailable (HTTP 409). Remediation: choose a different visit time and retry.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients/:patientId/visit-requests",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patient": {
+            "email": "jane@example.com",
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "phone": "5551234567",
+            "dateOfBirth": "1990-05-15",
+            "address": {
+                "street1": "123 Main Street",
+                "city": "Austin",
+                "state": "TX",
+                "zip": "78701",
+            },
+        },
+        "visit": {
+            "date": "2026-03-10",
+            "time": "14:30",
+            "visitType": "Consultation",
+            "preferredMethod": "video",
+            "duration": 30,
+            "notes": "Initial consultation",
+        },
+        "send_email": False,
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "patientId": "abc123",
+    "partnerPatientId": null,
+    "visitId": "abc123_4_consultation",
+    "visitNumber": 4,
+    "visitStatus": "Pending Review",
+    "visitType": "Consultation",
+    "date": "2026-03-10",
+    "time": "14:30",
+    "preferredMethod": "video",
+    "duration": 30,
+    "patientStatus": "pending",
+    "requiredActions": [
+      "sync_visit",
+      "patient_continuation"
+    ],
+    "continuationSupported": true,
+    "emailSent": false,
+    "magicLink": "https://app.gen-health.app/magic-login?email=jane%40example.com&token=a1b2c3..."
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Patient profile incomplete. Remediation: provide firstName, lastName, email, phone, dateOfBirth, and address.street1/city/state/zip when creating a new patient."
+}
+```
+
 ### GET /v2/client/visits
 
 **List visit products**
@@ -1079,6 +3074,39 @@ List storefront-available visit products for this client.
 
 - Method not allowed. Remediation: use the List visit products API endpoint with GET.
 - API key required or invalid. Remediation: provide valid X-API-Key.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/visits",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "visits": [
+      {
+        "clientProductId": "clientA_network1_visitZ",
+        "productId": "visitZ",
+        "name": "Initial Visit",
+        "displayName": "Initial Visit"
+      }
+    ]
+  }
+}
+```
 
 ### GET /v2/client/patients/:patientId/visit-availability
 
@@ -1101,6 +3129,40 @@ Resolve provider availability for a client-owned patient with the same schedulin
 - `endDate`: YYYY-MM-DD range end
 - `providerId`: Optional provider override
 - `patientTimezone`: IANA timezone for display labels
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/patients/:patientId/visit-availability",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "availability": {
+      "2026-04-22": [
+        "09:00",
+        "09:30"
+      ]
+    },
+    "recommendedProvider": {
+      "providerId": "provider_123"
+    }
+  }
+}
+```
 
 ### POST /v2/client/patients/:patientId/visits
 
@@ -1138,6 +3200,54 @@ Create a confirmed sync visit for an existing patient and optionally link it to 
 - Invalid scheduledAtMillis. Remediation: provide visit.scheduledAtMillis as the canonical UTC start for confirmed visits.
 - Provider slot unavailable (HTTP 409). Remediation: choose a different visit time and retry.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/patients/:patientId/visits",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patientId": "abc123",
+        "visit": {
+            "providerId": "provider_123",
+            "date": "2026-04-20",
+            "time": "09:30",
+            "scheduledAtMillis": 1776682200000,
+            "relatedOrderId": "order456",
+            "patientTimezone": "America/New_York",
+        },
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "visitId": "visit_123",
+    "visitStatus": "Confirmed",
+    "requiredActions": []
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "visit.date and visit.time are required. Remediation: include visit.date (YYYY-MM-DD) and visit.time (HH:mm, 24-hour format)."
+}
+```
+
 ### PATCH /v2/client/visits/:visitId
 
 **Update sync visit**
@@ -1158,6 +3268,30 @@ Reschedule or update a client-owned sync visit.
 - `providerId`: Optional provider reassignment
 - `status`: Usually Confirmed when rescheduling
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/visits/:visitId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "scheduledAtMillis": 1776768600000,
+        "patientTimezone": "America/New_York",
+        "status": "Confirmed",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### Response
+
+No example response provided in the API docs.
+
 ### DELETE /v2/client/visits/:visitId
 
 **Cancel sync visit**
@@ -1176,6 +3310,28 @@ Cancel a scheduled visit and stop future reminder jobs.
 - `visitId` _(required)_: Visit ID
 - `cancellationReason`: Stored on the visit record
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.delete(
+    "https://api.gen-health.app/v2/client/visits/:visitId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "cancellationReason": "Patient requested a new time",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### Response
+
+No example response provided in the API docs.
+
 ### POST /v2/client/visits/:visitId/magic-links
 
 **Create visit access link**
@@ -1193,6 +3349,34 @@ Issue a patient-facing access URL for a scheduled visit. The client receives the
 
 - `visitId` _(required)_: Visit ID
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/visits/:visitId/magic-links",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "visitId": "visit_123",
+    "visitAccessUrl": "https://gen-health.app/magic-login?...",
+    "expiresAt": "2026-04-17T15:30:00.000Z"
+  }
+}
+```
+
 ### GET /v2/client/post-visit-redirect
 
 **Get post-visit redirect settings**
@@ -1208,6 +3392,33 @@ Retrieve the post-visit redirect configuration for this client. When enabled, pa
 **Common Errors And Remediation**
 
 - Client not found. Remediation: verify the API key belongs to an active client.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/post-visit-redirect",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "postVisitRedirectEnabled": true,
+    "postVisitRedirectUrl": "https://example.com/thank-you"
+  }
+}
+```
 
 ### PATCH /v2/client/post-visit-redirect
 
@@ -1233,6 +3444,46 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 - postVisitRedirectUrl is required when postVisitRedirectEnabled is true. Remediation: provide a valid URL starting with http:// or https://.
 - postVisitRedirectUrl is not a valid URL. Remediation: provide a valid absolute URL starting with http:// or https://.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/post-visit-redirect",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "postVisitRedirectEnabled": True,
+        "postVisitRedirectUrl": "https://example.com/thank-you",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "postVisitRedirectEnabled": true,
+    "postVisitRedirectUrl": "https://example.com/thank-you"
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "postVisitRedirectEnabled is required. Remediation: send a boolean postVisitRedirectEnabled field in the request body."
+}
+```
+
 ### GET /v2/client/patients/:patientId/visits
 
 **List patient visits**
@@ -1247,6 +3498,32 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - `patientId` _(required)_: System patientId or partnerPatientId
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/patients/:patientId/visits",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "visits": []
+  }
+}
+```
+
 ### GET /v2/client/visits/:visitId
 
 **Get visit detail**
@@ -1260,6 +3537,34 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 **Parameters**
 
 - `visitId` _(required)_: Visit ID
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/visits/:visitId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "visit": {
+      "visitId": "visit_123"
+    }
+  }
+}
+```
 
 ## Messages
 
@@ -1281,6 +3586,32 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 - `activitySince`: Alias for updatedSince
 - `limit`: Page size, capped at 200
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/conversations",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "conversations": []
+  }
+}
+```
+
 ### POST /v2/client/conversations
 
 **Create conversation**
@@ -1295,6 +3626,37 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 **Parameters**
 
 - `patientId` _(required)_: System patientId or partnerPatientId
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/conversations",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patientId": "abc123",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "conversation": {
+      "conversationId": "conv_123"
+    }
+  }
+}
+```
 
 ### GET /v2/client/conversations/:conversationId
 
@@ -1313,6 +3675,35 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 **Key Details**
 
 - PATCH the same path with status active, closed, or archived. DELETE archives the conversation.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "conversation": {
+      "conversationId": "conv_123",
+      "status": "active"
+    }
+  }
+}
+```
 
 ### POST /v2/client/conversations/:conversationId/messages
 
@@ -1338,6 +3729,49 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - Provider, provider-network, practice, and internal sender types are rejected. PATCH/DELETE can only modify messages created by the Client API.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId/messages",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "author": "client",
+        "senderUserId": "client_staff_123",
+        "text": "Your order is ready for review.",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": {
+      "messageId": "msg_123",
+      "text": "Your order is ready for review.",
+      "senderId": "client_staff_123",
+      "senderName": "Care Team",
+      "senderType": "Client Staff",
+      "deliveryStatus": "sent",
+      "direction": "outbound",
+      "sentVia": "api",
+      "actorId": "client_api:api_key_123",
+      "onBehalfOfUserId": "client_staff_123",
+      "sentOnBehalfOfPatient": false
+    }
+  }
+}
+```
+
 ### POST /v2/client/conversations/:conversationId/messages
 
 **Send patient-authored message**
@@ -1361,6 +3795,49 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - Patient-authored messages use the conversation patient as senderId and are routed as inbound care-team messages. The API actor is preserved in metadata.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId/messages",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "author": "patient",
+        "patientId": "abc123",
+        "text": "I uploaded my intake form.",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": {
+      "messageId": "msg_456",
+      "text": "I uploaded my intake form.",
+      "senderId": "abc123",
+      "senderName": "Jane Smith",
+      "senderType": "Patient",
+      "deliveryStatus": "received",
+      "direction": "inbound",
+      "sentVia": "api",
+      "actorId": "client_api:api_key_123",
+      "onBehalfOfUserId": "abc123",
+      "sentOnBehalfOfPatient": true
+    }
+  }
+}
+```
+
 ### PATCH /v2/client/conversations/:conversationId
 
 **Update conversation status**
@@ -1377,6 +3854,42 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 - `conversationId` _(required)_: Conversation ID
 - `status` _(required)_: active, closed, or archived
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "status": "closed",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "conversation": {
+      "conversationId": "conv_123",
+      "patientId": "abc123",
+      "status": "closed",
+      "escalatedToProvider": false,
+      "providerInboxVisible": false,
+      "lastMessageText": "Your order is ready for review."
+    }
+  }
+}
+```
+
 ### DELETE /v2/client/conversations/:conversationId
 
 **Archive conversation**
@@ -1390,6 +3903,36 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 **Parameters**
 
 - `conversationId` _(required)_: Conversation ID
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.delete(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "conversation": {
+      "conversationId": "conv_123",
+      "patientId": "abc123",
+      "status": "archived"
+    }
+  }
+}
+```
 
 ### POST /v2/client/conversations/:conversationId/escalations
 
@@ -1407,6 +3950,42 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 - `conversationId` _(required)_: Conversation ID
 - `reason`: Short escalation reason stored on the conversation
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId/escalations",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "reason": "Patient needs clinical review",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "conversation": {
+      "conversationId": "conv_123",
+      "patientId": "abc123",
+      "status": "active",
+      "escalatedToProvider": true,
+      "providerInboxVisible": true,
+      "providerNetworkId": "network1"
+    }
+  }
+}
+```
+
 ### GET /v2/client/conversations/:conversationId/messages
 
 **List conversation messages**
@@ -1422,6 +4001,44 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 - `conversationId` _(required)_: Conversation ID
 - `limit`: Page size, capped at 200
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId/messages",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "messages": [
+      {
+        "messageId": "msg_123",
+        "text": "Your order is ready for review.",
+        "senderName": "Client API",
+        "senderType": "Client API",
+        "attachments": [],
+        "deliveryStatus": "sent",
+        "direction": "outbound",
+        "sentVia": "api",
+        "createdAt": "2026-03-01T12:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
 ### GET /v2/client/conversations/:conversationId/messages/:messageId
 
 **Get conversation message**
@@ -1436,6 +4053,41 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - `conversationId` _(required)_: Conversation ID
 - `messageId` _(required)_: Message ID
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId/messages/:messageId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": {
+      "messageId": "msg_123",
+      "text": "Your order is ready for review.",
+      "senderName": "Client API",
+      "senderType": "Client API",
+      "attachments": [],
+      "deliveryStatus": "sent",
+      "direction": "outbound",
+      "sentVia": "api"
+    }
+  }
+}
+```
 
 ### PATCH /v2/client/conversations/:conversationId/messages/:messageId
 
@@ -1454,6 +4106,39 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 - `messageId` _(required)_: Message ID
 - `text` _(required)_: Updated external message text
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId/messages/:messageId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "text": "Your order is ready for review today.",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": {
+      "messageId": "msg_123",
+      "text": "Your order is ready for review today.",
+      "updatedAt": "2026-03-01T12:05:00.000Z"
+    }
+  }
+}
+```
+
 ### DELETE /v2/client/conversations/:conversationId/messages/:messageId
 
 **Delete conversation message**
@@ -1468,6 +4153,36 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - `conversationId` _(required)_: Conversation ID
 - `messageId` _(required)_: Message ID
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.delete(
+    "https://api.gen-health.app/v2/client/conversations/:conversationId/messages/:messageId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": {
+      "messageId": "msg_123",
+      "text": "Your order is ready for review.",
+      "deletedAt": "2026-03-01T12:05:00.000Z"
+    }
+  }
+}
+```
 
 ## Prescriptions
 
@@ -1492,6 +4207,62 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - Prescription status and clinical content are read-only through V2. Only notification rules support CRUD.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/prescriptions",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "prescriptions": [
+      {
+        "prescriptionId": "rx_123",
+        "patientId": "abc123",
+        "clientId": "clientA",
+        "orderId": "order456",
+        "chartReviewId": "review_123",
+        "providerNetworkId": "network1",
+        "providerUserId": "provider_123",
+        "providerName": "Dr. Example",
+        "source": "scriptsure",
+        "medicationName": "Medication name",
+        "dosage": "10 mg",
+        "units": "tablet",
+        "instructions": "Take once daily",
+        "quantity": 30,
+        "daysSupply": 30,
+        "refills": 0,
+        "status": "sent",
+        "submittedToPharmacy": true,
+        "trackingNumber": null,
+        "trackingCarrier": null,
+        "trackingUrl": null,
+        "prescribedDate": "2026-03-01T12:00:00.000Z",
+        "submittedAt": "2026-03-01T12:05:00.000Z",
+        "shippedAt": null,
+        "deliveredAt": null,
+        "createdAt": "2026-03-01T12:00:00.000Z",
+        "updatedAt": "2026-03-01T12:05:00.000Z"
+      }
+    ]
+  }
+}
+```
+
 ### GET /v2/client/prescriptions/:prescriptionId
 
 **Get prescription detail**
@@ -1509,6 +4280,42 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 **Key Details**
 
 - No V2 endpoint updates prescription status. Attempts to use PATCH/POST for status changes are unsupported.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/prescriptions/:prescriptionId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "prescription": {
+      "prescriptionId": "rx_123",
+      "patientId": "abc123",
+      "orderId": "order456",
+      "medicationName": "Medication name",
+      "status": "sent",
+      "submittedToPharmacy": true,
+      "trackingNumber": null,
+      "createdAt": "2026-03-01T12:00:00.000Z",
+      "updatedAt": "2026-03-01T12:05:00.000Z"
+    }
+  }
+}
+```
 
 ### POST /v2/client/prescriptions/:prescriptionId/notification-rules
 
@@ -1529,6 +4336,44 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - GET the collection to list rules. PATCH or DELETE /notification-rules/:ruleId updates or removes one rule.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/prescriptions/:prescriptionId/notification-rules",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "anchor": "submittedAt",
+        "direction": "after",
+        "unit": "days",
+        "amount": 3,
+        "channels": {
+            "email": True,
+        },
+        "messageHtml": "<p>Your prescription is being processed.</p>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "notificationRule": {
+      "ruleId": "rule_123"
+    }
+  }
+}
+```
+
 ### GET /v2/client/prescriptions/:prescriptionId/notification-rules
 
 **List prescription notification rules**
@@ -1542,6 +4387,53 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 **Parameters**
 
 - `prescriptionId` _(required)_: Prescription ID
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/prescriptions/:prescriptionId/notification-rules",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "prescription": {
+      "prescriptionId": "rx_123",
+      "patientId": "abc123",
+      "status": "sent",
+      "medicationName": "Semaglutide"
+    },
+    "notificationRules": [
+      {
+        "ruleId": "rule_123",
+        "enabled": true,
+        "anchor": "submittedAt",
+        "direction": "after",
+        "unit": "days",
+        "amount": 3,
+        "channels": {
+          "email": true
+        },
+        "messageHtml": "<p>Your prescription is being processed.</p>",
+        "nextJob": null,
+        "jobs": []
+      }
+    ]
+  }
+}
+```
 
 ### PATCH /v2/client/prescriptions/:prescriptionId/notification-rules/:ruleId
 
@@ -1559,6 +4451,58 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 - `prescriptionId` _(required)_: Prescription ID
 - `ruleId` _(required)_: Rule ID returned by List prescription notification rules
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/prescriptions/:prescriptionId/notification-rules/:ruleId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "enabled": True,
+        "anchor": "submittedAt",
+        "direction": "after",
+        "unit": "days",
+        "amount": 5,
+        "channels": {
+            "email": True,
+        },
+        "messageText": "Your prescription is still being processed.",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "notificationRule": {
+      "ruleId": "rule_123",
+      "enabled": true,
+      "anchor": "submittedAt",
+      "direction": "after",
+      "unit": "days",
+      "amount": 5,
+      "channels": {
+        "email": true
+      },
+      "messageText": "Your prescription is still being processed."
+    },
+    "rebuild": {
+      "created": 1,
+      "cancelled": 1
+    }
+  }
+}
+```
+
 ### DELETE /v2/client/prescriptions/:prescriptionId/notification-rules/:ruleId
 
 **Delete prescription notification rule**
@@ -1573,6 +4517,37 @@ Enable or disable post-visit redirect for sync video visits, and set the destina
 
 - `prescriptionId` _(required)_: Prescription ID
 - `ruleId` _(required)_: Rule ID returned by List prescription notification rules
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.delete(
+    "https://api.gen-health.app/v2/client/prescriptions/:prescriptionId/notification-rules/:ruleId",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "ruleId": "rule_123",
+    "deleted": true,
+    "rebuild": {
+      "created": 0,
+      "cancelled": 1
+    }
+  }
+}
+```
 
 ## Payments
 
@@ -1618,6 +4593,78 @@ Open a short-lived payment session for an affiliate-model client. Use the return
 - Client is not affiliate-model. Remediation: use Create consult order or Create lab order for non-affiliate clients.
 - Merchant processor credentials are incomplete (HTTP 422). Remediation: configure Stripe or Authorize.net keys on the provider network.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/payments/affiliate/sessions",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "clientProductId": "clientA_network1_prodX",
+        "idempotencyKey": "checkout_2026_03_01_abc123",
+        "patient": {
+            "email": "jane@example.com",
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "partnerPatientId": "partner_001",
+        },
+        "couponCode": "SPRING100",
+        "send_receipt": True,
+        "successUrl": "https://storefront.example.com/success",
+        "cancelUrl": "https://storefront.example.com/cancel",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "paymentSessionId": "aps_...",
+  "paymentSessionToken": "apst_...",
+  "mode": "stripe",
+  "status": "pending_payment",
+  "expiresAt": "2026-03-01T12:30:00.000Z",
+  "summary": {
+    "primaryItem": {
+      "name": "Weight Loss Program"
+    },
+    "pricing": {
+      "subtotalAmount": 199,
+      "discountAmount": 0,
+      "totalAmount": 199
+    }
+  },
+  "pricing": {
+    "baseAmountCents": 19900,
+    "discountAmountCents": 0,
+    "finalAmountCents": 19900,
+    "baseAmount": 199,
+    "discountAmount": 0,
+    "finalAmount": 199
+  },
+  "appliedCoupon": null,
+  "publicKey": "pk_live_...",
+  "stripeCheckoutSessionId": "cs_test_..."
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "idempotencyKey already used with a different payload. Remediation: generate a new idempotencyKey for the new payload."
+}
+```
+
 ### POST /v2/client/payments/affiliate/session-completions
 
 **Complete affiliate payment session**
@@ -1653,6 +4700,74 @@ Finalize an Authorize.net or zero-dollar affiliate session after tokenizing card
 - billingInfo incomplete. Remediation: provide firstName, lastName, street1, city, state, zip, email, phone.
 - Invalid paymentSessionToken. Remediation: use the token returned by createAffiliatePaymentSession.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/payments/affiliate/session-completions",
+    headers={
+        "X-Payment-Session-Id": "<paymentSessionId>",
+        "X-Payment-Session-Token": "<paymentSessionToken>",
+    },
+    json={
+        "paymentSessionId": "aps_...",
+        "paymentSessionToken": "apst_...",
+        "billingInfo": {
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "street1": "123 Main St",
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701",
+            "email": "jane@example.com",
+            "phone": "5551234567",
+        },
+        "sameAsBilling": True,
+        "opaqueData": {
+            "dataDescriptor": "COMMON.ACCEPT.INAPP.PAYMENT",
+            "dataValue": "...",
+        },
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "paymentSessionId": "aps_...",
+  "status": "paid",
+  "paid": true,
+  "orderId": "order_xyz",
+  "patientId": "abc123",
+  "paymentStatus": "paid",
+  "paymentGateway": "authorize",
+  "magicLoginUrl": "https://gen-health.app/magic-login?...",
+  "summary": {
+    "primaryItem": {
+      "name": "Weight Loss Program"
+    }
+  },
+  "pricing": {
+    "finalAmount": 199
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Session mode is not authorize (HTTP 422). Remediation: for Stripe sessions, redirect the shopper to the returned checkout URL instead."
+}
+```
+
 ### GET /v2/client/payments/affiliate/session-status
 
 **Get affiliate payment session status**
@@ -1681,6 +4796,57 @@ Poll the current status of an affiliate payment session. Stripe sessions self-fi
 
 - Invalid or expired paymentSessionToken. Remediation: the token is invalid or the session expired — start a new checkout with createAffiliatePaymentSession.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/payments/affiliate/session-status",
+    headers={
+        "X-Payment-Session-Id": "<paymentSessionId>",
+        "X-Payment-Session-Token": "<paymentSessionToken>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "paymentSessionId": "aps_...",
+  "mode": "stripe",
+  "status": "paid",
+  "paid": true,
+  "orderId": "order_xyz",
+  "patientId": "abc123",
+  "paymentStatus": "paid",
+  "paymentGateway": "stripe",
+  "magicLoginUrl": "https://gen-health.app/magic-login?...",
+  "expiresAt": "2026-03-01T12:30:00.000Z",
+  "summary": {
+    "primaryItem": {
+      "name": "Weight Loss Program"
+    }
+  },
+  "pricing": {
+    "finalAmount": 199
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "Invalid or expired paymentSessionToken. Remediation: the token is invalid or the session expired — start a new checkout with createAffiliatePaymentSession."
+}
+```
+
 ### POST /v2/client/payments/affiliate/session-status
 
 **Get affiliate payment session status with JSON body**
@@ -1697,6 +4863,39 @@ JSON-body variant of the affiliate payment session status endpoint. Prefer GET w
 
 - `paymentSessionId` _(required)_: Returned by Create affiliate payment session. Alias: sessionId
 - `paymentSessionToken` _(required)_: Returned by Create affiliate payment session
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/payments/affiliate/session-status",
+    headers={},
+    json={
+        "paymentSessionId": "aps_...",
+        "paymentSessionToken": "apst_...",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "paymentSessionId": "aps_...",
+  "mode": "stripe",
+  "status": "paid",
+  "paid": true,
+  "orderId": "order_xyz",
+  "patientId": "abc123",
+  "paymentStatus": "paid",
+  "paymentGateway": "stripe"
+}
+```
 
 ## Promocodes
 
@@ -1738,6 +4937,82 @@ List affiliate-aware promocodes for this client. Supports filtering by status, a
 - 401 API key required or invalid. Remediation: provide a valid X-API-Key.
 - 405 Method not allowed. Remediation: use GET /v2/client/promocodes.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/promocodes",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "promocodes": [
+      {
+        "promocodeId": "doc_abc123",
+        "code": "JASON20",
+        "normalizedCode": "JASON20",
+        "name": "Jason 20% off",
+        "status": "active",
+        "discount": {
+          "type": "percentage_off",
+          "value": 20
+        },
+        "assignmentType": "locked",
+        "affiliates": [
+          {
+            "affiliateId": "aff_jason",
+            "utmSlug": "jason-lab"
+          }
+        ],
+        "utmSlug": "jason-lab",
+        "applicability": {
+          "scope": "category_ids",
+          "productIds": [],
+          "categoryIds": [
+            "cat_mens_health"
+          ]
+        },
+        "eligibleClientProductIds": [],
+        "maxUsage": 500,
+        "usageCount": 12,
+        "validity": {
+          "startsAt": "2026-01-01T00:00:00.000Z",
+          "endsAt": "2026-12-31T23:59:59.000Z"
+        },
+        "createdAt": "2026-01-15T10:00:00.000Z",
+        "updatedAt": "2026-04-10T18:30:00.000Z"
+      }
+    ],
+    "pagination": {
+      "limit": 50,
+      "hasMore": false,
+      "nextCursor": null
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "400 Invalid status. Remediation: use one of [\"active\", \"inactive\"]."
+}
+```
+
 ### GET /v2/client/promocodes/:code
 
 **Get promocode by code**
@@ -1757,6 +5032,70 @@ Fetch a single promocode by its human-readable code (case-insensitive). Returns 
 **Common Errors And Remediation**
 
 - 404 Promocode '<code>' was not found for this client. Remediation: use GET /v2/client/promocodes to list valid codes.
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/promocodes/:code",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "promocode": {
+      "promocodeId": "doc_abc123",
+      "code": "JASON20",
+      "normalizedCode": "JASON20",
+      "name": "Jason 20% off",
+      "status": "active",
+      "discount": {
+        "type": "percentage_off",
+        "value": 20
+      },
+      "assignmentType": "locked",
+      "affiliates": [
+        {
+          "affiliateId": "aff_jason",
+          "utmSlug": "jason-lab"
+        }
+      ],
+      "utmSlug": "jason-lab",
+      "applicability": {
+        "scope": "all_products",
+        "productIds": [],
+        "categoryIds": []
+      },
+      "eligibleClientProductIds": [],
+      "maxUsage": null,
+      "usageCount": 12,
+      "validity": null,
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "updatedAt": "2026-04-10T18:30:00.000Z"
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "404 Promocode '<code>' was not found for this client. Remediation: use GET /v2/client/promocodes to list valid codes."
+}
+```
 
 ### PATCH /v2/client/promocodes/:code
 
@@ -1800,6 +5139,74 @@ Sync affiliate-related metadata onto an existing Gen-Health promocode (the dashb
 - 404 Promocode '<code>' was not found for this client. Remediation: use GET /v2/client/promocodes to list valid codes.
 - 405 Method not allowed. Remediation: use PATCH /v2/client/promocodes/:code.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/promocodes/:code",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "utmSlug": "jason-lab",
+        "affiliateId": "aff_jason",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "promocode": {
+      "promocodeId": "doc_abc123",
+      "code": "JASON20",
+      "normalizedCode": "JASON20",
+      "name": "Jason 20% off",
+      "status": "active",
+      "discount": {
+        "type": "percentage_off",
+        "value": 20
+      },
+      "assignmentType": "locked",
+      "affiliates": [
+        {
+          "affiliateId": "aff_jason",
+          "utmSlug": "jason-lab"
+        }
+      ],
+      "utmSlug": "jason-lab",
+      "applicability": {
+        "scope": "all_products",
+        "productIds": [],
+        "categoryIds": []
+      },
+      "eligibleClientProductIds": [],
+      "maxUsage": null,
+      "usageCount": 12,
+      "validity": null,
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "updatedAt": "2026-05-01T09:00:00.000Z"
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "400 code is required. Remediation: include the code in the URL."
+}
+```
+
 ### GET /v2/client/promocodes/validations
 
 **Validate promocode for one or more products (read-only)**
@@ -1841,6 +5248,96 @@ Read-only price + applicability check used by external/iframe checkout pages. Su
 - 405 Method not allowed. Remediation: use GET or POST /v2/client/promocodes/validations.
 - 500 Unable to validate promocode. Remediation: retry the request or contact support.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/promocodes/validations",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "reasonCodes": [],
+    "promocode": {
+      "code": "JASON20",
+      "name": "Jason 20% off",
+      "assignmentType": "locked",
+      "discount": {
+        "type": "percentage_off",
+        "value": 20
+      },
+      "applicability": {
+        "scope": "all_products",
+        "productIds": [],
+        "categoryIds": []
+      },
+      "utmSlug": "jason-lab"
+    },
+    "product": {
+      "clientProductId": "clientA_network1_prodX",
+      "productId": "prodX",
+      "name": "PT-141 / Oxytocin / Tadalafil"
+    },
+    "pricing": {
+      "currency": "usd",
+      "quantity": 1,
+      "unitPrice": {
+        "amountCents": 19900,
+        "amount": 199.00,
+        "currency": "usd"
+      },
+      "unitDiscount": {
+        "amountCents": 3980,
+        "amount": 39.80,
+        "currency": "usd"
+      },
+      "unitTotal": {
+        "amountCents": 15920,
+        "amount": 159.20,
+        "currency": "usd"
+      },
+      "lineSubtotal": {
+        "amountCents": 19900,
+        "amount": 199.00,
+        "currency": "usd"
+      },
+      "lineDiscount": {
+        "amountCents": 3980,
+        "amount": 39.80,
+        "currency": "usd"
+      },
+      "lineTotal": {
+        "amountCents": 15920,
+        "amount": 159.20,
+        "currency": "usd"
+      }
+    }
+  }
+}
+```
+
+#### 400 Response
+
+```json
+{
+  "success": false,
+  "error": "403 This origin is not allowed for the provided storefront key. Remediation: add the origin under the storefront key allowlist."
+}
+```
+
 ### POST /v2/client/promocodes/validations
 
 **Validate promocode with JSON body**
@@ -1860,6 +5357,56 @@ JSON-body variant of the read-only promocode validation endpoint. Use it when va
 - `clientProductIds`: Array of clientProductId values for bundle validation
 - `clientProductId`: Single clientProductId value
 - `quantity`: Positive integer; default 1
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.post(
+    "https://api.gen-health.app/v2/client/promocodes/validations",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "code": "JASON20",
+        "clientProductIds": [
+            "clientA_network1_prodX",
+            "clientA_network1_prodY",
+        ],
+        "quantity": 1,
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "appliesToAny": true,
+    "allValid": true,
+    "reasonCodes": [],
+    "items": [
+      {
+        "clientProductId": "clientA_network1_prodX",
+        "valid": true,
+        "reasonCodes": [],
+        "pricing": {
+          "lineTotal": {
+            "amount": 159.20,
+            "currency": "usd"
+          }
+        }
+      }
+    ]
+  }
+}
+```
 
 ## Business
 
@@ -1891,6 +5438,67 @@ Authenticated branding management for display name, website, support contact, br
 - `layoutOptions.emailTheme`: Email theme object
 - `layoutOptions.formTheme`: Form theme object
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/business/branding",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "displayName": "Acme Health",
+        "brandingSlug": "acme-health",
+        "accentColor": "#2563eb",
+        "layoutOptions": {
+            "checkoutTheme": {
+                "layoutPreset": "editorial",
+                "headline": "Complete checkout",
+            },
+        },
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "branding": {
+      "clientId": "clientA",
+      "displayName": "Acme Health",
+      "website": "https://acme.example",
+      "supportEmail": "support@acme.example",
+      "phoneNumber": "+15551234567",
+      "brandingSlug": "acme-health",
+      "customDomain": null,
+      "layoutOptions": {
+        "checkoutTheme": {
+          "layoutPreset": "editorial",
+          "headline": "Complete checkout"
+        },
+        "loginTheme": null,
+        "emailTheme": null,
+        "formTheme": null
+      },
+      "colors": {
+        "accentColor": "#2563eb",
+        "primaryColor": "#2563eb",
+        "secondaryColor": null,
+        "backgroundColor": null,
+        "sidebarHeaderBackgroundColor": null
+      }
+    }
+  }
+}
+```
+
 ### GET /v2/client/business/branding
 
 **Get business branding**
@@ -1902,6 +5510,44 @@ Retrieve authenticated branding settings, including operational layout options n
 **Headers**
 
 - `X-API-Key`: `<your-api-key>`
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/business/branding",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "branding": {
+      "clientId": "clientA",
+      "displayName": "Acme Health",
+      "brandingSlug": "acme-health",
+      "layoutOptions": {
+        "checkoutTheme": {
+          "layoutPreset": "editorial"
+        },
+        "loginTheme": null,
+        "emailTheme": null,
+        "formTheme": null
+      }
+    }
+  }
+}
+```
 
 ### PATCH /v2/client/business/payment-processor
 
@@ -1926,6 +5572,51 @@ Authenticated payment processor configuration. GET returns processor value, cust
 
 - Credential values are write-only in API responses. Use fieldStatus to confirm whether required fields are present.
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/business/payment-processor",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "paymentProcessor": "stripe",
+        "credentials": {
+            "publicKey": "pk_live_...",
+            "secretKey": "sk_live_...",
+        },
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "paymentProcessor": "stripe",
+    "customPaymentInstructions": null,
+    "credentialStatus": {
+      "stripe": {
+        "exists": true,
+        "hasKeys": true,
+        "fieldStatus": {
+          "publicKey": true,
+          "secretKey": true
+        },
+        "updatedAt": "2026-03-01T12:00:00.000Z"
+      }
+    }
+  }
+}
+```
+
 ### GET /v2/client/business/payment-processor
 
 **Get payment processor**
@@ -1937,6 +5628,43 @@ Retrieve the active payment processor, custom instructions, and secret-safe cred
 **Headers**
 
 - `X-API-Key`: `<your-api-key>`
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/business/payment-processor",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "paymentProcessor": "stripe",
+    "customPaymentInstructions": null,
+    "credentialStatus": {
+      "stripe": {
+        "exists": true,
+        "hasKeys": true,
+        "fieldStatus": {
+          "publicKey": true,
+          "secretKey": true
+        }
+      }
+    }
+  }
+}
+```
 
 ### PATCH /v2/client/business/checkout-options
 
@@ -1961,6 +5689,60 @@ Authenticated checkout option management for patient checkout sequence, receipt 
 - `postVisitRedirectUrl`: Redirect URL starting with http:// or https://
 - `defaultShippingPrice`: Non-negative default shipping price
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.patch(
+    "https://api.gen-health.app/v2/client/business/checkout-options",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+    json={
+        "patientCheckout": {
+            "sequence": {
+                "products": "intake_before_payment",
+                "labs": "payment_before_intake",
+            },
+        },
+        "patientReceipts": {"enabled": True},
+        "queuePrescriptionReview": {"enabled": False},
+        "postVisitRedirectEnabled": True,
+        "postVisitRedirectUrl": "https://example.com/thank-you",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "checkoutOptions": {
+      "patientCheckout": {
+        "sequence": {
+          "products": "intake_before_payment",
+          "labs": "payment_before_intake"
+        }
+      },
+      "patientReceipts": {
+        "enabled": true
+      },
+      "queuePrescriptionReview": {
+        "enabled": false
+      },
+      "postVisitRedirectEnabled": true,
+      "postVisitRedirectUrl": "https://example.com/thank-you",
+      "defaultShippingPrice": null
+    }
+  }
+}
+```
+
 ### GET /v2/client/business/checkout-options
 
 **Get checkout options**
@@ -1973,6 +5755,48 @@ Retrieve patient checkout sequence, receipt, prescription review, post-visit red
 
 - `X-API-Key`: `<your-api-key>`
 
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/business/checkout-options",
+    headers={
+        "X-API-Key": "<your-api-key>",
+    },
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "checkoutOptions": {
+      "patientCheckout": {
+        "sequence": {
+          "products": "intake_before_payment",
+          "labs": "payment_before_intake"
+        }
+      },
+      "patientReceipts": {
+        "enabled": true
+      },
+      "queuePrescriptionReview": {
+        "enabled": false
+      },
+      "postVisitRedirectEnabled": true,
+      "postVisitRedirectUrl": "https://example.com/thank-you",
+      "defaultShippingPrice": null
+    }
+  }
+}
+```
+
 ### GET /v2/client/branding
 
 **Get client branding**
@@ -1984,6 +5808,38 @@ Public visual branding payload for a client-scoped docs or checkout page. Operat
 **Parameters**
 
 - `clientId` _(required)_: Client document id. Alias: client_id
+
+#### Python Request
+
+```python
+# requests >= 2.31
+import requests
+
+response = requests.get(
+    "https://api.gen-health.app/v2/client/branding",
+    headers={},
+)
+print(response.status_code, response.json())
+```
+
+#### 200 Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "clientA",
+    "name": "Acme Health",
+    "iconUrl": "https://storage.googleapis.com/.../icon.png",
+    "logoUrl": "https://storage.googleapis.com/.../logo.png",
+    "accentColor": "#2563eb",
+    "primaryColor": "#2563eb",
+    "secondaryColor": "#0f172a",
+    "backgroundColor": "#ffffff",
+    "logoWhiteBackground": false
+  }
+}
+```
 
 ## Important Defaults
 

@@ -11,9 +11,9 @@ This repo is split into:
 Shared frontend packages can be added under `packages/` when there is enough
 shared UI, configuration, or API client code to justify them.
 
-Arora API reference material lives in `docs/arora/`. Before changing Arora
-client code or connected frontend behavior, use those copied Markdown docs and
-response examples as the source of truth.
+Arora API reference material lives in `docs/arora/api-reference.md`. Before
+changing Arora client code or connected frontend behavior, use that copied
+Markdown reference as the source of truth.
 
 ## Backend
 
