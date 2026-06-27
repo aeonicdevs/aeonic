@@ -121,6 +121,8 @@ const conversationMessages = ref<ConversationMessage[]>([]);
 const conversationMessageLoading = ref(false);
 const savingConversation = ref(false);
 const conversationNotice = ref('');
+let entityLoadRequestId = 0;
+let conversationMessageRequestId = 0;
 
 const entityPages: EntityPageConfig[] = [
   {
@@ -274,7 +276,11 @@ const latestMedicationShipment = computed(() => medicationShipment.value ?? medi
 const selectedProduct = computed(() => (
   aroraProducts.value.find((product) => product.clientProductId === selectedProductId.value) ?? null
 ));
-const conversationRows = computed(() => entityRows.value as Conversation[]);
+const conversationRows = computed(() => (
+  entityRows.value.filter((row): row is EntityRow & Conversation => (
+    typeof row.conversationId === 'string' && row.conversationId.length > 0
+  ))
+));
 const selectedConversation = computed(() => (
   conversationRows.value.find((conversation) => conversation.conversationId === selectedConversationId.value) ?? null
 ));
@@ -415,6 +421,11 @@ function formatConversationTitle(conversation: Conversation) {
   return `Conversation ${conversation.conversationId.slice(-8)}`;
 }
 
+function isCurrentEntityRequest(requestId: number, page: EntityPageConfig) {
+  const currentPage = currentEntityPage.value;
+  return requestId === entityLoadRequestId && currentPage?.key === page.key && currentPage.path === page.path;
+}
+
 function parseAttachmentUrls(value: string) {
   return value
     .split(/\r?\n/)
@@ -515,18 +526,25 @@ async function loadMedicationShipments() {
 
 async function loadCurrentEntityPage() {
   const page = currentEntityPage.value;
+  const requestId = ++entityLoadRequestId;
   if (!token.value || !page) {
+    conversationMessageRequestId += 1;
+    entityLoading.value = false;
+    conversationMessageLoading.value = false;
     entityRows.value = [];
     entityError.value = '';
+    conversationMessages.value = [];
     return;
   }
 
-    entityLoading.value = true;
-    entityError.value = '';
-    try {
-      const formsMatch = formsRouteMatch.value;
+  entityLoading.value = true;
+  entityError.value = '';
+  try {
+    const formsMatch = formsRouteMatch.value;
     const params: Record<string, string> = formsMatch ? { orderId: decodeURIComponent(formsMatch[1]) } : {};
     const body = await api<Record<string, unknown>>(page.endpoint(params));
+    if (!isCurrentEntityRequest(requestId, page)) return;
+
     const rows = body[page.collectionKey];
     entityRows.value = Array.isArray(rows) ? rows as EntityRow[] : [];
     if (page.key === 'conversations') {
@@ -540,14 +558,18 @@ async function loadCurrentEntityPage() {
       }
     }
   } catch (err) {
+    if (!isCurrentEntityRequest(requestId, page)) return;
     entityRows.value = [];
     entityError.value = err instanceof Error ? err.message : `Unable to load ${page.label.toLowerCase()}`;
   } finally {
-    entityLoading.value = false;
+    if (isCurrentEntityRequest(requestId, page)) {
+      entityLoading.value = false;
+    }
   }
 }
 
 async function loadConversationMessages(conversationId: string) {
+  const requestId = ++conversationMessageRequestId;
   if (!conversationId) {
     conversationMessages.value = [];
     return;
@@ -558,11 +580,15 @@ async function loadConversationMessages(conversationId: string) {
     const body = await api<{ mode: string; messages: ConversationMessage[] }>(
       `/patients/arora/conversations/${encodeURIComponent(conversationId)}/messages`,
     );
+    if (requestId !== conversationMessageRequestId || selectedConversationId.value !== conversationId) return;
     conversationMessages.value = body.messages;
   } catch (err) {
+    if (requestId !== conversationMessageRequestId || selectedConversationId.value !== conversationId) return;
     entityError.value = err instanceof Error ? err.message : 'Unable to load conversation messages';
   } finally {
-    conversationMessageLoading.value = false;
+    if (requestId === conversationMessageRequestId) {
+      conversationMessageLoading.value = false;
+    }
   }
 }
 
