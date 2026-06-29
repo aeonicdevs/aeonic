@@ -2,6 +2,10 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
+const NEXUS_BASE_URL = (
+  import.meta.env.VITE_NEXUS_BASE_URL ??
+  (import.meta.env.PROD ? 'https://nexus.aeonichealthsystems.com' : 'http://127.0.0.1:5173')
+).replace(/\/+$/, '');
 const TOKEN_KEY = 'aeonic.partner.token';
 
 type Partner = {
@@ -90,7 +94,7 @@ const login = reactive({
 
 const nexusUrl = computed(() => {
   const host = partner.value?.clinicDomain || 'app.demo.localhost';
-  return `http://127.0.0.1:5173/?clinicHost=${encodeURIComponent(host)}`;
+  return `${NEXUS_BASE_URL}/?clinicHost=${encodeURIComponent(host)}`;
 });
 
 const hostnamePreview = computed(() => {
