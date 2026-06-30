@@ -62,14 +62,30 @@ type CloudflareCustomHostname = {
   error: string | null;
 };
 
+type FinixOnboarding = {
+  mode: 'mock' | 'sandbox' | 'live';
+  status: 'not_started' | 'IN_PROGRESS' | 'COMPLETED' | 'UPDATE_REQUESTED' | 'REJECTED' | string;
+  onboardingFormId: string | null;
+  onboardingUrl: string | null;
+  onboardingUrlExpiresAt: string | null;
+  identityId: string | null;
+  merchantId: string | null;
+  merchantStatus: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+};
+
 const mode = ref<'signup' | 'login'>('signup');
 const loading = ref(false);
 const verifyingDomain = ref(false);
 const provisioningCloudflare = ref(false);
+const startingFinix = ref(false);
+const refreshingFinix = ref(false);
 const error = ref('');
 const notice = ref('');
 const token = ref(localStorage.getItem(TOKEN_KEY) ?? '');
 const partner = ref<Partner | null>(null);
+const finixOnboarding = ref<FinixOnboarding | null>(null);
 const baseDomainDraft = ref('');
 const subdomainDraft = ref('app');
 const domainSetup = ref<DomainSetup>({
@@ -225,6 +241,55 @@ const cloudflareTxtValidationRecords = computed(() => {
     }));
 });
 
+const finixStatusCopy = computed(() => {
+  const status = finixOnboarding.value?.status ?? 'not_started';
+  const merchantStatus = finixOnboarding.value?.merchantStatus;
+  if (status === 'COMPLETED' && merchantStatus === 'APPROVED') {
+    return {
+      color: 'success',
+      icon: 'mdi-bank-check',
+      label: 'Approved',
+      message: 'Payments onboarding is complete for this partner.',
+    };
+  }
+  switch (status) {
+    case 'IN_PROGRESS':
+      return {
+        color: 'info',
+        icon: 'mdi-bank-clock',
+        label: 'In progress',
+        message: 'Finish the hosted Finix onboarding form, then refresh this status.',
+      };
+    case 'UPDATE_REQUESTED':
+      return {
+        color: 'warning',
+        icon: 'mdi-bank-alert',
+        label: 'Update requested',
+        message: 'Finix needs corrected or additional onboarding information.',
+      };
+    case 'REJECTED':
+      return {
+        color: 'error',
+        icon: 'mdi-bank-remove',
+        label: 'Rejected',
+        message: 'Finix rejected this onboarding attempt.',
+      };
+    default:
+      return {
+        color: 'default',
+        icon: 'mdi-bank-plus',
+        label: 'Not started',
+        message: 'Start payments onboarding to create a Finix seller record.',
+      };
+  }
+});
+
+const finixActionLabel = computed(() => {
+  if (!finixOnboarding.value?.onboardingFormId) return 'Start onboarding';
+  if (finixOnboarding.value.status === 'COMPLETED') return 'Open form';
+  return 'Continue form';
+});
+
 const shouldPollCloudflare = computed(() => {
   return Boolean(
     partner.value?.clinicDomain
@@ -265,6 +330,7 @@ function setSession(nextToken: string, nextPartner: Partner) {
   hydrateDomainDrafts(nextPartner.clinicDomain);
   localStorage.setItem(TOKEN_KEY, nextToken);
   void loadDomainSetup();
+  void loadFinixOnboarding();
 }
 
 function normalizeHostInput(value: string) {
@@ -423,6 +489,65 @@ async function loadDomainSetup() {
   }
 }
 
+async function loadFinixOnboarding() {
+  if (!partner.value) {
+    finixOnboarding.value = null;
+    return;
+  }
+
+  try {
+    const body = await api<{ finix: FinixOnboarding }>('/partners/finix/onboarding');
+    finixOnboarding.value = body.finix;
+  } catch {
+    finixOnboarding.value = null;
+  }
+}
+
+async function startFinixOnboarding() {
+  startingFinix.value = true;
+  error.value = '';
+  notice.value = '';
+  try {
+    const body = await api<{ finix: FinixOnboarding }>('/partners/finix/onboarding', {
+      method: 'POST',
+    });
+    finixOnboarding.value = body.finix;
+    notice.value = body.finix.mode === 'mock'
+      ? 'Mock Finix onboarding form created.'
+      : 'Finix onboarding form created.';
+    if (body.finix.onboardingUrl) {
+      window.open(body.finix.onboardingUrl, '_blank', 'noopener,noreferrer');
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to start Finix onboarding';
+  } finally {
+    startingFinix.value = false;
+  }
+}
+
+async function refreshFinixOnboarding() {
+  refreshingFinix.value = true;
+  error.value = '';
+  notice.value = '';
+  try {
+    const body = await api<{ finix: FinixOnboarding }>('/partners/finix/onboarding/refresh', {
+      method: 'POST',
+    });
+    finixOnboarding.value = body.finix;
+    notice.value = 'Payments onboarding status refreshed.';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to refresh Finix onboarding';
+  } finally {
+    refreshingFinix.value = false;
+  }
+}
+
+function openFinixOnboarding() {
+  if (finixOnboarding.value?.onboardingUrl) {
+    window.open(finixOnboarding.value.onboardingUrl, '_blank', 'noopener,noreferrer');
+  }
+}
+
 async function provisionCloudflareHostname() {
   provisioningCloudflare.value = true;
   error.value = '';
@@ -478,6 +603,7 @@ async function restoreSession() {
     hydrateDomainDrafts(body.partner.clinicDomain);
     await loadDomainSetup();
     await loadCloudflareHostname();
+    await loadFinixOnboarding();
   } catch {
     localStorage.removeItem(TOKEN_KEY);
     token.value = '';
@@ -491,6 +617,7 @@ function signOut() {
   }
   token.value = '';
   partner.value = null;
+  finixOnboarding.value = null;
   domainVerification.value = null;
   cloudflareHostname.value = null;
   hydrateDomainDrafts(null);
@@ -582,21 +709,21 @@ onUnmounted(() => {
           </div>
 
           <v-row>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="3">
               <div class="stat">
                 <div class="label mb-2">Patients</div>
                 <div class="serif text-h4">0</div>
                 <div class="text-caption text-medium-emphasis mt-1">Ready for real data.</div>
               </div>
             </v-col>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="3">
               <div class="stat">
                 <div class="label mb-2">Domain</div>
                 <div class="serif text-h5">{{ partner.clinicDomain || 'Not configured' }}</div>
                 <div class="text-caption text-medium-emphasis mt-1">Used by Nexus host detection.</div>
               </div>
             </v-col>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="3">
               <div class="stat">
                 <div class="label mb-2">Status</div>
                 <div class="d-flex align-center ga-2">
@@ -606,7 +733,98 @@ onUnmounted(() => {
                 <div class="text-caption text-medium-emphasis mt-1">{{ domainStatusCopy.message }}</div>
               </div>
             </v-col>
+            <v-col cols="12" md="3">
+              <div class="stat">
+                <div class="label mb-2">Payments</div>
+                <div class="d-flex align-center ga-2">
+                  <v-icon :color="finixStatusCopy.color" :icon="finixStatusCopy.icon" size="20" />
+                  <div class="serif text-h5">{{ finixStatusCopy.label }}</div>
+                </div>
+                <div class="text-caption text-medium-emphasis mt-1">{{ finixOnboarding?.mode || 'mock' }} Finix mode.</div>
+              </div>
+            </v-col>
           </v-row>
+
+          <v-card class="panel pa-5 pa-md-6 mt-6">
+            <div class="d-flex flex-column flex-md-row align-md-center ga-3 mb-4">
+              <div class="d-flex align-center ga-3">
+                <v-icon color="primary" icon="mdi-bank-outline" />
+                <div>
+                  <h2 class="text-h6 mb-0">Payments onboarding</h2>
+                  <div class="text-body-2 text-medium-emphasis">Create and track the partner's Finix seller onboarding form.</div>
+                </div>
+              </div>
+              <v-spacer />
+              <v-chip :color="finixStatusCopy.color" :prepend-icon="finixStatusCopy.icon" variant="tonal">
+                {{ finixStatusCopy.label }}
+              </v-chip>
+            </div>
+
+            <v-alert v-if="notice" class="mb-4" type="success" variant="tonal">{{ notice }}</v-alert>
+            <v-alert v-if="error" class="mb-4" type="error" variant="tonal">{{ error }}</v-alert>
+
+            <div class="cloudflare-grid">
+              <div class="dns-record-cell">
+                <span class="label">Finix mode</span>
+                <strong>{{ finixOnboarding?.mode || 'mock' }}</strong>
+              </div>
+              <div class="dns-record-cell">
+                <span class="label">Onboarding form</span>
+                <strong>{{ finixOnboarding?.onboardingFormId || 'Not created yet' }}</strong>
+              </div>
+              <div class="dns-record-cell">
+                <span class="label">Merchant status</span>
+                <strong>{{ finixOnboarding?.merchantStatus || 'Pending' }}</strong>
+              </div>
+            </div>
+
+            <div class="cloudflare-grid mt-4">
+              <div class="dns-record-cell">
+                <span class="label">Identity</span>
+                <strong>{{ finixOnboarding?.identityId || 'Pending' }}</strong>
+              </div>
+              <div class="dns-record-cell">
+                <span class="label">Merchant</span>
+                <strong>{{ finixOnboarding?.merchantId || 'Pending' }}</strong>
+              </div>
+              <div class="dns-record-cell">
+                <span class="label">Updated</span>
+                <strong>{{ finixOnboarding?.updatedAt || 'Never' }}</strong>
+              </div>
+            </div>
+
+            <div class="d-flex flex-column flex-md-row align-md-center ga-3 mt-4">
+              <div class="text-body-2 text-medium-emphasis">
+                {{ finixStatusCopy.message }}
+              </div>
+              <v-spacer />
+              <v-btn
+                v-if="finixOnboarding?.onboardingUrl"
+                prepend-icon="mdi-open-in-new"
+                variant="tonal"
+                @click="openFinixOnboarding"
+              >
+                {{ finixActionLabel }}
+              </v-btn>
+              <v-btn
+                color="primary"
+                :loading="startingFinix"
+                :prepend-icon="finixOnboarding?.onboardingFormId ? 'mdi-bank-plus' : 'mdi-bank-plus'"
+                @click="startFinixOnboarding"
+              >
+                {{ finixOnboarding?.onboardingFormId ? 'Restart onboarding' : finixActionLabel }}
+              </v-btn>
+              <v-btn
+                :disabled="!finixOnboarding?.onboardingFormId"
+                :loading="refreshingFinix"
+                prepend-icon="mdi-refresh"
+                variant="text"
+                @click="refreshFinixOnboarding"
+              >
+                Refresh
+              </v-btn>
+            </div>
+          </v-card>
 
           <v-card class="panel pa-5 pa-md-6 mt-6">
             <div class="d-flex align-center ga-3 mb-4">

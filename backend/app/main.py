@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.arora_client import (
@@ -25,6 +25,14 @@ from app.arora_client import (
     AroraValidationError,
     build_arora_client,
     initialize_arora_storage,
+)
+from app.finix_client import (
+    FinixClientError,
+    FinixConfigurationError,
+    FinixNotFoundError,
+    FinixValidationError,
+    build_finix_client,
+    initialize_finix_storage,
 )
 
 
@@ -40,6 +48,7 @@ CloudflareProvisioningStatus = Literal[
     "active",
     "needs_attention",
 ]
+FinixApiMode = Literal["mock", "sandbox", "live"]
 ALLOWED_ATTACHMENT_CONTENT_TYPES = {
     "application/pdf",
     "image/gif",
@@ -290,6 +299,27 @@ def _initialize_database(database_path: str | Path) -> None:
                 uploaded_at TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS partner_finix_accounts (
+                partner_id TEXT PRIMARY KEY REFERENCES partners(id) ON DELETE CASCADE,
+                onboarding_form_id TEXT UNIQUE,
+                onboarding_status TEXT NOT NULL DEFAULT 'not_started',
+                onboarding_url TEXT,
+                onboarding_url_expires_at TEXT,
+                identity_id TEXT,
+                merchant_id TEXT,
+                merchant_status TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS finix_webhook_events (
+                id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                processed_at TEXT
+            );
+
             """
         )
         _ensure_partner_domain_cloudflare_columns(db)
@@ -298,6 +328,7 @@ def _initialize_database(database_path: str | Path) -> None:
         # Arora-local storage is initialized through the shared boundary so
         # main.py does not need to know which tables the mock client owns.
         initialize_arora_storage(db)
+        initialize_finix_storage(db)
 
 
 def _ensure_partner_domain_cloudflare_columns(db: sqlite3.Connection) -> None:
@@ -373,6 +404,16 @@ def _raise_arora_http_error(error: AroraClientError) -> None:
     raise HTTPException(status_code=500, detail=str(error)) from error
 
 
+def _raise_finix_http_error(error: FinixClientError) -> None:
+    if isinstance(error, FinixConfigurationError):
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if isinstance(error, FinixValidationError):
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if isinstance(error, FinixNotFoundError):
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    raise HTTPException(status_code=500, detail=str(error)) from error
+
+
 def _public_partner(partner: sqlite3.Row) -> dict[str, str | None]:
     return {
         "id": partner["id"],
@@ -380,6 +421,34 @@ def _public_partner(partner: sqlite3.Row) -> dict[str, str | None]:
         "email": partner["email"],
         "clinicName": partner["clinic_name"],
         "clinicDomain": partner["clinic_domain"],
+    }
+
+
+def _public_finix_onboarding(row: sqlite3.Row | None) -> dict[str, Any]:
+    if row is None:
+        return {
+            "mode": _finix_mode(),
+            "status": "not_started",
+            "onboardingFormId": None,
+            "onboardingUrl": None,
+            "onboardingUrlExpiresAt": None,
+            "identityId": None,
+            "merchantId": None,
+            "merchantStatus": None,
+            "updatedAt": None,
+            "createdAt": None,
+        }
+    return {
+        "mode": _finix_mode(),
+        "status": row["onboarding_status"],
+        "onboardingFormId": row["onboarding_form_id"],
+        "onboardingUrl": row["onboarding_url"],
+        "onboardingUrlExpiresAt": row["onboarding_url_expires_at"],
+        "identityId": row["identity_id"],
+        "merchantId": row["merchant_id"],
+        "merchantStatus": row["merchant_status"],
+        "updatedAt": row["updated_at"],
+        "createdAt": row["created_at"],
     }
 
 
@@ -970,6 +1039,27 @@ def _arora_mode() -> Literal["mock", "dry_run", "live"]:
     return _arora_run_mode()
 
 
+def _finix_configured() -> bool:
+    return bool(os.getenv("FINIX_USERNAME") and os.getenv("FINIX_PASSWORD"))
+
+
+def _finix_run_mode() -> FinixApiMode:
+    configured = os.getenv("FINIX_API_MODE")
+    if configured:
+        mode = configured.strip().lower()
+        if mode in {"mock", "sandbox", "live"}:
+            return mode  # type: ignore[return-value]
+    return "sandbox" if _finix_configured() else "mock"
+
+
+def _finix_client(db: sqlite3.Connection):
+    return build_finix_client(_finix_run_mode(), db)
+
+
+def _finix_mode() -> FinixApiMode:
+    return _finix_run_mode()
+
+
 def _cloudflare_api_request(
     method: str,
     path: str,
@@ -1411,6 +1501,235 @@ def _get_partner_domain(db: sqlite3.Connection, domain: str) -> sqlite3.Row | No
     return db.execute("SELECT * FROM partner_domains WHERE domain = ?", (domain,)).fetchone()
 
 
+def _get_partner_finix_account(db: sqlite3.Connection, partner_id: str) -> sqlite3.Row | None:
+    return db.execute(
+        "SELECT * FROM partner_finix_accounts WHERE partner_id = ?",
+        (partner_id,),
+    ).fetchone()
+
+
+def _get_partner_finix_account_by_form(db: sqlite3.Connection, form_id: str) -> sqlite3.Row | None:
+    return db.execute(
+        "SELECT * FROM partner_finix_accounts WHERE onboarding_form_id = ?",
+        (form_id,),
+    ).fetchone()
+
+
+def _finix_form_id(form: dict[str, Any]) -> str:
+    form_id = form.get("id")
+    if not isinstance(form_id, str) or not form_id.strip():
+        raise HTTPException(status_code=502, detail="Finix onboarding response did not include an id")
+    return form_id.strip()
+
+
+def _finix_link_details(form: dict[str, Any]) -> tuple[str | None, str | None]:
+    onboarding_link = form.get("onboarding_link")
+    if isinstance(onboarding_link, dict):
+        link_url = onboarding_link.get("link_url") or onboarding_link.get("url")
+        expires_at = onboarding_link.get("expires_at") or onboarding_link.get("expiresAt")
+        return (
+            link_url if isinstance(link_url, str) else None,
+            expires_at if isinstance(expires_at, str) else None,
+        )
+    links = form.get("_links")
+    if isinstance(links, dict):
+        link = links.get("onboarding_link") or links.get("self")
+        if isinstance(link, dict):
+            href = link.get("href")
+            return (href if isinstance(href, str) else None, None)
+    return None, None
+
+
+def _sync_finix_onboarding_form(
+    db: sqlite3.Connection,
+    *,
+    partner_id: str,
+    form: dict[str, Any],
+) -> sqlite3.Row:
+    form_id = _finix_form_id(form)
+    link_url, expires_at = _finix_link_details(form)
+    status = str(form.get("status") or "IN_PROGRESS")
+    identity_id = form.get("identity_id") or form.get("identity")
+    merchant_id = form.get("merchant_id") or form.get("merchant")
+    merchant_status = form.get("merchant_status") or form.get("merchantStatus")
+    now = datetime.now(UTC).isoformat()
+    db.execute(
+        """
+        INSERT INTO partner_finix_accounts (
+            partner_id,
+            onboarding_form_id,
+            onboarding_status,
+            onboarding_url,
+            onboarding_url_expires_at,
+            identity_id,
+            merchant_id,
+            merchant_status,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(partner_id) DO UPDATE SET
+            onboarding_form_id = excluded.onboarding_form_id,
+            onboarding_status = excluded.onboarding_status,
+            onboarding_url = COALESCE(excluded.onboarding_url, partner_finix_accounts.onboarding_url),
+            onboarding_url_expires_at = COALESCE(
+                excluded.onboarding_url_expires_at,
+                partner_finix_accounts.onboarding_url_expires_at
+            ),
+            identity_id = COALESCE(excluded.identity_id, partner_finix_accounts.identity_id),
+            merchant_id = COALESCE(excluded.merchant_id, partner_finix_accounts.merchant_id),
+            merchant_status = COALESCE(excluded.merchant_status, partner_finix_accounts.merchant_status),
+            updated_at = excluded.updated_at
+        """,
+        (
+            partner_id,
+            form_id,
+            status,
+            link_url,
+            expires_at,
+            identity_id if isinstance(identity_id, str) else None,
+            merchant_id if isinstance(merchant_id, str) else None,
+            merchant_status if isinstance(merchant_status, str) else None,
+            now,
+        ),
+    )
+    account = _get_partner_finix_account(db, partner_id)
+    if account is None:
+        raise HTTPException(status_code=500, detail="Unable to save Finix onboarding state")
+    return account
+
+
+def _handle_finix_webhook_event(db: sqlite3.Connection, payload: dict[str, Any]) -> dict[str, Any]:
+    event_id = payload.get("id")
+    if not isinstance(event_id, str) or not event_id.strip():
+        event_id = f"finix_event_{uuid.uuid4().hex}"
+    event_type = str(payload.get("type") or payload.get("event_type") or "unknown")
+    raw_payload = json.dumps(payload, sort_keys=True)
+    now = datetime.now(UTC).isoformat()
+
+    existing = db.execute("SELECT id FROM finix_webhook_events WHERE id = ?", (event_id,)).fetchone()
+    if existing is not None:
+        return {"processed": False, "duplicate": True, "eventId": event_id}
+
+    db.execute(
+        """
+        INSERT INTO finix_webhook_events (id, event_type, payload, received_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (event_id, event_type, raw_payload, now),
+    )
+
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    form_id = data.get("id") or data.get("onboarding_form_id") or data.get("onboardingFormId")
+    partner_id = data.get("partner_id")
+    if not isinstance(partner_id, str) and isinstance(form_id, str):
+        account = _get_partner_finix_account_by_form(db, form_id)
+        partner_id = account["partner_id"] if account is not None else None
+
+    if isinstance(partner_id, str) and isinstance(form_id, str):
+        form = {
+            "id": form_id,
+            "status": data.get("status") or "IN_PROGRESS",
+            "identity_id": data.get("identity_id"),
+            "merchant_id": data.get("merchant_id"),
+            "merchant_status": data.get("merchant_status"),
+        }
+        _sync_finix_onboarding_form(db, partner_id=partner_id, form=form)
+
+    db.execute(
+        "UPDATE finix_webhook_events SET processed_at = ? WHERE id = ?",
+        (datetime.now(UTC).isoformat(), event_id),
+    )
+    return {"processed": True, "duplicate": False, "eventId": event_id}
+
+
+def _mock_finix_form_html(form: dict[str, Any], token: str, message: str | None = None) -> str:
+    escaped_message = (
+        f"<p class=\"notice\">{message}</p>"
+        if message
+        else ""
+    )
+    form_id = form["id"]
+    status = form["status"]
+    merchant_status = form.get("merchant_status") or "Not provisioned"
+    identity_id = form.get("identity_id") or "Pending"
+    merchant_id = form.get("merchant_id") or "Pending"
+    action_base = f"/mock/finix/onboarding-forms/{urllib.parse.quote(form_id, safe='')}"
+    token_query = urllib.parse.urlencode({"token": token})
+    return f"""
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Mock Finix Onboarding</title>
+        <style>
+          :root {{ color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+          body {{ margin: 0; min-height: 100vh; background: #f6f4ef; color: #201b16; display: grid; place-items: center; padding: 24px; }}
+          main {{ width: min(680px, 100%); background: #fffaf2; border: 1px solid #ded6c8; border-radius: 8px; padding: 28px; box-shadow: 0 18px 60px rgba(32, 27, 22, 0.08); }}
+          h1 {{ font-size: 28px; line-height: 1.1; margin: 0 0 12px; }}
+          p {{ color: #665e53; line-height: 1.5; }}
+          dl {{ display: grid; grid-template-columns: 160px 1fr; gap: 10px 16px; margin: 24px 0; }}
+          dt {{ color: #82796e; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }}
+          dd {{ margin: 0; overflow-wrap: anywhere; }}
+          .actions {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }}
+          button {{ border: 0; border-radius: 6px; padding: 12px 16px; font-weight: 700; cursor: pointer; }}
+          .primary {{ background: #2f6b4f; color: white; }}
+          .secondary {{ background: #eadfce; color: #2d281f; }}
+          .danger {{ background: #8f2f2f; color: white; }}
+          .notice {{ background: #e7f4ec; border: 1px solid #b7dac5; color: #214c35; border-radius: 6px; padding: 12px; }}
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Mock Finix onboarding</h1>
+          <p>This simulated hosted form lets local development complete, request updates, or reject a partner merchant account.</p>
+          {escaped_message}
+          <dl>
+            <dt>Form</dt><dd>{form_id}</dd>
+            <dt>Status</dt><dd>{status}</dd>
+            <dt>Identity</dt><dd>{identity_id}</dd>
+            <dt>Merchant</dt><dd>{merchant_id}</dd>
+            <dt>Merchant status</dt><dd>{merchant_status}</dd>
+          </dl>
+          <div class="actions">
+            <form method="post" action="{action_base}/complete?{token_query}">
+              <button class="primary" type="submit">Complete and approve</button>
+            </form>
+            <form method="post" action="{action_base}/request-update?{token_query}">
+              <button class="secondary" type="submit">Request update</button>
+            </form>
+            <form method="post" action="{action_base}/reject?{token_query}">
+              <button class="danger" type="submit">Reject</button>
+            </form>
+          </div>
+        </main>
+      </body>
+    </html>
+    """
+
+
+def _submit_mock_finix_onboarding_form(
+    database_path: str | Path,
+    form_id: str,
+    token: str,
+    outcome: Literal["COMPLETED", "UPDATE_REQUESTED", "REJECTED"],
+) -> HTMLResponse:
+    if _finix_mode() != "mock":
+        raise HTTPException(status_code=404, detail="Mock Finix is not enabled")
+
+    with _connect(database_path) as db:
+        form, event = _finix_client(db).complete_onboarding_form(form_id, token=token, outcome=outcome)
+        result = _handle_finix_webhook_event(db, event)
+        message = (
+            "Mock Finix sent a webhook and Aeonic processed the merchant approval."
+            if outcome == "COMPLETED"
+            else "Mock Finix sent a webhook and Aeonic updated the onboarding status."
+        )
+        if result.get("duplicate"):
+            message = "Aeonic had already processed this mock Finix webhook."
+        return HTMLResponse(_mock_finix_form_html(form, token, message))
+
+
 def _public_stored_cloudflare_custom_hostname(
     partner_domain: sqlite3.Row | None,
     domain: str | None,
@@ -1616,6 +1935,22 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             status_code=500,
         )
 
+    @app.exception_handler(FinixClientError)
+    async def finix_client_error_handler(request: Request, error: FinixClientError) -> Response:
+        try:
+            _raise_finix_http_error(error)
+        except HTTPException as http_error:
+            return Response(
+                content=json.dumps({"detail": http_error.detail}),
+                media_type="application/json",
+                status_code=http_error.status_code,
+            )
+        return Response(
+            content=json.dumps({"detail": str(error)}),
+            media_type="application/json",
+            status_code=500,
+        )
+
     @app.middleware("http")
     async def cors_for_static_and_partner_origins(request: Request, call_next):
         origin = request.headers.get("origin")
@@ -1639,6 +1974,66 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     @app.get("/", tags=["system"])
     def root() -> dict[str, str]:
         return {"name": "Aeonic API", "status": "running"}
+
+    @app.post("/webhooks/finix", tags=["webhooks"])
+    async def finix_webhook(request: Request) -> dict[str, object]:
+        try:
+            payload = await request.json()
+        except json.JSONDecodeError as error:
+            raise HTTPException(status_code=422, detail="Webhook body must be JSON") from error
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=422, detail="Webhook body must be a JSON object")
+
+        with _connect(resolved_database_path) as db:
+            return _handle_finix_webhook_event(db, payload)
+
+    @app.get("/mock/finix/onboarding-forms/{form_id}", response_class=HTMLResponse, tags=["mock-finix"])
+    def mock_finix_onboarding_form(form_id: str, token: str) -> HTMLResponse:
+        if _finix_mode() != "mock":
+            raise HTTPException(status_code=404, detail="Mock Finix is not enabled")
+        with _connect(resolved_database_path) as db:
+            form = _finix_client(db).get_onboarding_form(form_id)
+            return HTMLResponse(_mock_finix_form_html(form, token))
+
+    @app.get("/partner-finix-return", response_class=HTMLResponse, tags=["partners"])
+    def partner_finix_return(expired: int | None = None) -> HTMLResponse:
+        title = "Finix session expired" if expired else "Finix onboarding submitted"
+        message = (
+            "The Finix onboarding session expired. Return to the partner console and restart or refresh onboarding."
+            if expired
+            else "Return to the partner console and refresh payments onboarding status."
+        )
+        return HTMLResponse(
+            f"""
+            <!doctype html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>{title}</title>
+                <style>
+                  body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f4ef; color: #201b16; }}
+                  main {{ width: min(560px, 100%); background: #fffaf2; border: 1px solid #ded6c8; border-radius: 8px; padding: 28px; }}
+                  h1 {{ margin: 0 0 12px; font-size: 28px; }}
+                  p {{ color: #665e53; line-height: 1.5; }}
+                </style>
+              </head>
+              <body><main><h1>{title}</h1><p>{message}</p></main></body>
+            </html>
+            """
+        )
+
+    @app.post("/mock/finix/onboarding-forms/{form_id}/complete", response_class=HTMLResponse, tags=["mock-finix"])
+    def mock_finix_onboarding_complete(form_id: str, token: str) -> HTMLResponse:
+        return _submit_mock_finix_onboarding_form(resolved_database_path, form_id, token, "COMPLETED")
+
+    @app.post("/mock/finix/onboarding-forms/{form_id}/request-update", response_class=HTMLResponse, tags=["mock-finix"])
+    def mock_finix_onboarding_request_update(form_id: str, token: str) -> HTMLResponse:
+        return _submit_mock_finix_onboarding_form(resolved_database_path, form_id, token, "UPDATE_REQUESTED")
+
+    @app.post("/mock/finix/onboarding-forms/{form_id}/reject", response_class=HTMLResponse, tags=["mock-finix"])
+    def mock_finix_onboarding_reject(form_id: str, token: str) -> HTMLResponse:
+        return _submit_mock_finix_onboarding_form(resolved_database_path, form_id, token, "REJECTED")
 
     @app.post("/partners/signup", tags=["partners"])
     def partner_signup(payload: PartnerSignup) -> dict[str, object]:
@@ -1686,6 +2081,53 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=401, detail="Invalid bearer token")
 
             return {"partner": _public_partner(partner)}
+
+    @app.get("/partners/finix/onboarding", tags=["partners"])
+    def partner_finix_onboarding_status(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            return {"finix": _public_finix_onboarding(_get_partner_finix_account(db, partner_id))}
+
+    @app.post("/partners/finix/onboarding", tags=["partners"])
+    def partner_finix_onboarding_start(
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            form = _finix_client(db).create_onboarding_form(
+                partner_id=partner_id,
+                clinic_name=partner["clinic_name"],
+                owner_name=partner["owner_name"],
+                email=partner["email"],
+                return_url=str(request.base_url).rstrip("/"),
+            )
+            account = _sync_finix_onboarding_form(db, partner_id=partner_id, form=form)
+            return {"finix": _public_finix_onboarding(account)}
+
+    @app.post("/partners/finix/onboarding/refresh", tags=["partners"])
+    def partner_finix_onboarding_refresh(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            partner_id = _authenticated(db, "partner", authorization)
+            partner = _get_partner_by_id(db, partner_id)
+            if partner is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            account = _get_partner_finix_account(db, partner_id)
+            if account is None or not account["onboarding_form_id"]:
+                return {"finix": _public_finix_onboarding(account)}
+
+            form = _finix_client(db).get_onboarding_form(account["onboarding_form_id"])
+            account = _sync_finix_onboarding_form(db, partner_id=partner_id, form=form)
+            return {"finix": _public_finix_onboarding(account)}
 
     @app.patch("/partners/settings", tags=["partners"])
     def partner_settings(

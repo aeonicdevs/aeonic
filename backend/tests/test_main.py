@@ -1448,3 +1448,67 @@ def test_partner_domains_must_be_unique(tmp_path) -> None:
     )
 
     assert second_settings.status_code == 409
+
+
+def test_partner_finix_mock_onboarding_completes_through_webhook(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("FINIX_API_MODE", raising=False)
+    monkeypatch.delenv("FINIX_USERNAME", raising=False)
+    monkeypatch.delenv("FINIX_PASSWORD", raising=False)
+    database_path = tmp_path / "aeonic.sqlite3"
+    client = TestClient(create_app(database_path))
+    suffix = uuid4().hex[:8]
+
+    signup = client.post(
+        "/partners/signup",
+        json={
+            "owner_name": "Dr. Finix",
+            "email": f"finix-{suffix}@example.com",
+            "password": "secret123",
+            "clinic_name": "Finix Clinic",
+        },
+    )
+    assert signup.status_code == 200
+    partner_token = signup.json()["token"]
+
+    initial = client.get(
+        "/partners/finix/onboarding",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+    assert initial.status_code == 200
+    assert initial.json()["finix"]["mode"] == "mock"
+    assert initial.json()["finix"]["status"] == "not_started"
+
+    started = client.post(
+        "/partners/finix/onboarding",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+    assert started.status_code == 200
+    started_finix = started.json()["finix"]
+    assert started_finix["status"] == "IN_PROGRESS"
+    assert started_finix["onboardingFormId"].startswith("mock_onboarding_form_")
+    assert "/mock/finix/onboarding-forms/" in started_finix["onboardingUrl"]
+
+    parsed_url = urllib.parse.urlparse(started_finix["onboardingUrl"])
+    completed = client.post(f"{parsed_url.path}?{parsed_url.query}")
+    assert completed.status_code == 405
+
+    completed = client.post(f"{parsed_url.path}/complete?{parsed_url.query}")
+    assert completed.status_code == 200
+    assert "Aeonic processed the merchant approval" in completed.text
+
+    status = client.get(
+        "/partners/finix/onboarding",
+        headers={"Authorization": f"Bearer {partner_token}"},
+    )
+    assert status.status_code == 200
+    finix = status.json()["finix"]
+    assert finix["status"] == "COMPLETED"
+    assert finix["merchantStatus"] == "APPROVED"
+    assert finix["identityId"].startswith("mock_identity_")
+    assert finix["merchantId"].startswith("mock_merchant_")
+
+    with main._connect(database_path) as db:
+        events = db.execute("SELECT event_type, processed_at FROM finix_webhook_events").fetchall()
+    assert len(events) == 1
+    assert events[0]["event_type"] == "onboarding_form.updated"
+    assert events[0]["processed_at"] is not None
