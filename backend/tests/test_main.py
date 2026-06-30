@@ -1,3 +1,5 @@
+import urllib.parse
+
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
@@ -537,6 +539,7 @@ def test_admin_can_simulate_mock_arora_conversations(monkeypatch, tmp_path) -> N
     monkeypatch.setenv("R2_ACCESS_KEY_ID", "test-access-key")
     monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "test-secret-key")
     monkeypatch.setenv("R2_BUCKET_NAME", "nexus-private")
+    monkeypatch.setenv("NEXUS_API_BASE_URL", "https://api.example.test")
     uploaded_objects = []
     monkeypatch.setattr(
         main,
@@ -672,6 +675,19 @@ def test_admin_can_simulate_mock_arora_conversations(monkeypatch, tmp_path) -> N
     assert opened.status_code == 200
     assert opened.json()["downloadUrl"].startswith("https://test-account.r2.cloudflarestorage.com/nexus-private/")
 
+    external_url = upload.json()["attachment"]["externalUrl"]
+    parsed_external_url = urllib.parse.urlparse(external_url)
+    assert f"{parsed_external_url.scheme}://{parsed_external_url.netloc}" == "https://api.example.test"
+    external_open = client.get(
+        f"{parsed_external_url.path}?{parsed_external_url.query}",
+        follow_redirects=False,
+    )
+    assert external_open.status_code == 302
+    assert external_open.headers["location"].startswith("https://test-account.r2.cloudflarestorage.com/nexus-private/")
+
+    invalid_external_open = client.get(f"{parsed_external_url.path}?token=wrong", follow_redirects=False)
+    assert invalid_external_open.status_code == 404
+
     other_patient_token, _ = _create_patient_session(client, f"{suffix}-other")
     cross_patient_open = client.get(
         f"/patients/attachments/{attachment_id}/open",
@@ -689,7 +705,7 @@ def test_admin_can_simulate_mock_arora_conversations(monkeypatch, tmp_path) -> N
     )
     assert patient_reply.status_code == 200
     assert patient_reply.json()["message"]["author"] == "patient"
-    assert patient_reply.json()["message"]["attachments"][0]["id"] == attachment_id
+    assert patient_reply.json()["message"]["attachments"][0]["url"] == external_url
     assert patient_reply.json()["message"]["attachments"][0]["name"] == "lab result.png"
 
     deleted_message = client.delete(
@@ -733,6 +749,12 @@ def test_admin_can_simulate_mock_arora_conversations(monkeypatch, tmp_path) -> N
 def test_live_arora_conversation_create_uses_documented_payload(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ARORA_API_MODE", "live")
     monkeypatch.setenv("ARORA_API_KEY", "test-arora-key")
+    monkeypatch.setenv("R2_ACCOUNT_ID", "test-account")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "test-access-key")
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "test-secret-key")
+    monkeypatch.setenv("R2_BUCKET_NAME", "nexus-private")
+    monkeypatch.setenv("NEXUS_API_BASE_URL", "https://api.example.test")
+    monkeypatch.setattr(main, "_r2_put_object", lambda object_key, content, content_type: None)
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]
     patient_token, patient_id = _create_patient_session(client, suffix)
@@ -750,10 +772,23 @@ def test_live_arora_conversation_create_uses_documented_payload(monkeypatch, tmp
 
     monkeypatch.setattr(LiveAroraClient, "_request", fake_arora_api_request)
 
+    upload = client.post(
+        "/patients/attachments/uploads",
+        headers={
+            "Authorization": f"Bearer {patient_token}",
+            "Content-Type": "image/png",
+            "X-Aeonic-File-Name": "progress.png",
+            "X-Aeonic-File-Size": "7",
+        },
+        content=b"pngdata",
+    )
+    assert upload.status_code == 200
+    attachment = upload.json()["attachment"]
+
     response = client.post(
         "/patients/arora/conversations",
         headers={"Authorization": f"Bearer {patient_token}"},
-        json={"text": "Can you confirm this order?"},
+        json={"text": "Can you confirm this order?", "attachment_ids": [attachment["id"]]},
     )
 
     assert response.status_code == 200
@@ -766,6 +801,14 @@ def test_live_arora_conversation_create_uses_documented_payload(monkeypatch, tmp
     assert "subject" not in calls[0]["payload"]
     assert calls[1]["payload"] == {
         "author": "patient",
+        "attachments": [
+            {
+                "url": attachment["externalUrl"],
+                "name": "progress.png",
+                "mimeType": "image/png",
+                "size": 7,
+            }
+        ],
         "patientId": patient_id,
         "text": "Can you confirm this order?",
     }

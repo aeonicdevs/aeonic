@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.arora_client import (
@@ -280,6 +281,7 @@ def _initialize_database(database_path: str | Path) -> None:
                 partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
                 patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
                 object_key TEXT NOT NULL UNIQUE,
+                external_token TEXT UNIQUE,
                 file_name TEXT NOT NULL,
                 content_type TEXT NOT NULL,
                 size INTEGER NOT NULL,
@@ -292,6 +294,7 @@ def _initialize_database(database_path: str | Path) -> None:
         )
         _ensure_partner_domain_cloudflare_columns(db)
         _ensure_medication_shipment_columns(db)
+        _ensure_patient_attachment_columns(db)
         # Arora-local storage is initialized through the shared boundary so
         # main.py does not need to know which tables the mock client owns.
         initialize_arora_storage(db)
@@ -319,6 +322,24 @@ def _ensure_medication_shipment_columns(db: sqlite3.Connection) -> None:
     if "updated_at" not in columns:
         db.execute("ALTER TABLE medication_shipments ADD COLUMN updated_at TEXT")
         db.execute("UPDATE medication_shipments SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP)")
+
+
+def _ensure_patient_attachment_columns(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(patient_attachments)").fetchall()}
+    if "external_token" not in columns:
+        db.execute("ALTER TABLE patient_attachments ADD COLUMN external_token TEXT")
+    rows = db.execute(
+        """
+        SELECT id
+        FROM patient_attachments
+        WHERE external_token IS NULL OR external_token = ''
+        """
+    ).fetchall()
+    for row in rows:
+        db.execute(
+            "UPDATE patient_attachments SET external_token = ? WHERE id = ?",
+            (secrets.token_urlsafe(32), row["id"]),
+        )
 
 
 def _normalize_email(email: str) -> str:
@@ -385,6 +406,10 @@ def _attachment_download_expires_seconds() -> int:
     return 5 * 60
 
 
+def _nexus_api_base_url() -> str:
+    return os.getenv("NEXUS_API_BASE_URL", "http://127.0.0.1:8000").strip().rstrip("/")
+
+
 def _r2_config() -> dict[str, str]:
     config = {
         "account_id": os.getenv("R2_ACCOUNT_ID", "").strip(),
@@ -425,12 +450,30 @@ def _public_attachment(attachment: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": attachment["id"],
         "url": f"/patients/attachments/{attachment['id']}/open",
+        "externalUrl": _external_attachment_url(attachment),
         "name": attachment["file_name"],
         "mimeType": attachment["content_type"],
         "size": attachment["size"],
         "status": attachment["status"],
         "createdAt": attachment["created_at"],
         "uploadedAt": attachment["uploaded_at"],
+    }
+
+
+def _external_attachment_url(attachment: sqlite3.Row) -> str:
+    token = attachment["external_token"]
+    return (
+        f"{_nexus_api_base_url()}/attachments/external/{urllib.parse.quote(attachment['id'], safe='')}"
+        f"?token={urllib.parse.quote(token, safe='')}"
+    )
+
+
+def _arora_attachment(attachment: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "url": _external_attachment_url(attachment),
+        "name": attachment["file_name"],
+        "mimeType": attachment["content_type"],
+        "size": attachment["size"],
     }
 
 
@@ -455,6 +498,8 @@ def _conversation_attachments_from_ids(
     db: sqlite3.Connection,
     patient_id: str,
     attachment_ids: list[str],
+    *,
+    external_urls: bool = False,
 ) -> list[dict[str, Any]]:
     if len(attachment_ids) > 10:
         raise HTTPException(status_code=422, detail="Messages support up to 10 attachments")
@@ -471,7 +516,7 @@ def _conversation_attachments_from_ids(
             raise HTTPException(status_code=404, detail="Attachment not found")
         if attachment["status"] != "uploaded":
             raise HTTPException(status_code=422, detail="Attachment upload has not completed")
-        attachments.append(_public_attachment(attachment))
+        attachments.append(_arora_attachment(attachment) if external_urls else _public_attachment(attachment))
     return attachments
 
 
@@ -1937,16 +1982,26 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=401, detail="Invalid bearer token")
 
             attachment_id = uuid.uuid4().hex
+            external_token = secrets.token_urlsafe(32)
             object_key = f"partners/{patient['partner_id']}/patients/{patient_id}/attachments/{attachment_id}/{file_name}"
             now = datetime.now(UTC).isoformat()
             db.execute(
                 """
                 INSERT INTO patient_attachments (
-                    id, partner_id, patient_id, object_key, file_name, content_type, size, status
+                    id, partner_id, patient_id, object_key, external_token, file_name, content_type, size, status
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_upload')
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_upload')
                 """,
-                (attachment_id, patient["partner_id"], patient_id, object_key, file_name, normalized_content_type, size),
+                (
+                    attachment_id,
+                    patient["partner_id"],
+                    patient_id,
+                    object_key,
+                    external_token,
+                    file_name,
+                    normalized_content_type,
+                    size,
+                ),
             )
             _r2_put_object(object_key, upload_content, normalized_content_type)
             db.execute(
@@ -1962,6 +2017,30 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             if attachment is None:
                 raise HTTPException(status_code=500, detail="Unable to save attachment")
             return {"attachment": _public_attachment(attachment)}
+
+    @app.get("/attachments/external/{attachment_id}", tags=["attachments"])
+    def attachment_external_open(attachment_id: str, token: str) -> RedirectResponse:
+        with _connect(resolved_database_path) as db:
+            attachment = db.execute(
+                """
+                SELECT *
+                FROM patient_attachments
+                WHERE id = ?
+                  AND external_token = ?
+                  AND status = 'uploaded'
+                """,
+                (attachment_id, token),
+            ).fetchone()
+            if attachment is None:
+                raise HTTPException(status_code=404, detail="Attachment not found")
+            return RedirectResponse(
+                _r2_presigned_url(
+                    "GET",
+                    attachment["object_key"],
+                    expires_seconds=_attachment_download_expires_seconds(),
+                ),
+                status_code=302,
+            )
 
     @app.get("/patients/attachments/{attachment_id}/open", tags=["patients"])
     def patient_attachment_open(
@@ -2115,7 +2194,12 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             arora_client = _arora_client(db)
             conversation = arora_client.create_conversation(patient_id=patient_id)
             conversation_id = str(conversation.get("conversationId") or conversation.get("id") or "")
-            attachments = _conversation_attachments_from_ids(db, patient_id, payload.attachment_ids)
+            attachments = _conversation_attachments_from_ids(
+                db,
+                patient_id,
+                payload.attachment_ids,
+                external_urls=True,
+            )
             if payload.text is not None or attachments:
                 result = arora_client.create_message(
                     conversation_id,
@@ -2165,7 +2249,12 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         with _connect(resolved_database_path) as db:
             patient_id = _authenticated(db, "patient", authorization)
             patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
-            attachments = _conversation_attachments_from_ids(db, patient_id, payload.attachment_ids)
+            attachments = _conversation_attachments_from_ids(
+                db,
+                patient_id,
+                payload.attachment_ids,
+                external_urls=True,
+            )
             result = _arora_client(db).create_message(
                 conversation_id,
                 author="patient",

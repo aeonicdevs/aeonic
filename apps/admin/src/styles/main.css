@@ -192,6 +192,10 @@ body {
   gap: 8px;
 }
 
+.attachment-chip {
+  cursor: pointer;
+}
+
 @media (max-width: 760px) {
   .order-row,
   .product-row,

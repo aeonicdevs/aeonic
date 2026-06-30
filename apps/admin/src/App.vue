@@ -75,6 +75,7 @@ type MockConversationMessage = {
   updatedAt: string;
   createdAt: string;
 };
+type MessageAttachment = MockConversationMessage['attachments'][number];
 
 const fallbackStages: OrderStage[] = [
   {
@@ -277,6 +278,12 @@ function parseAttachmentUrls(value: string) {
     .map((url) => url.trim())
     .filter(Boolean)
     .map((url) => ({ url, name: url.split('/').pop() || 'Attachment' }));
+}
+
+function openAttachment(attachment: MessageAttachment) {
+  if (attachment.url.startsWith('http://') || attachment.url.startsWith('https://')) {
+    window.open(attachment.url, '_blank', 'noopener,noreferrer');
+  }
 }
 
 function nextStageFor(value: string) {
@@ -1311,9 +1318,11 @@ onUnmounted(() => {
                         <v-chip
                           v-for="attachment in message.attachments"
                           :key="attachment.url"
+                          class="attachment-chip"
                           size="small"
                           prepend-icon="mdi-paperclip"
                           variant="tonal"
+                          @click="openAttachment(attachment)"
                         >
                           {{ attachment.name || attachment.url }}
                         </v-chip>
