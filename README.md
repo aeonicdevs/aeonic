@@ -200,6 +200,9 @@ For scalable tenant custom domains:
 - Keep `NEXUS_DNS_TARGET=nexus.aeonichealthsystems.com`.
 - Point Cloudflare For SaaS fallback/custom-hostname traffic at the Droplet/Caddy Nexus origin, not Netlify.
 - Use `NEXUS_API_BASE_URL=https://api.aeonichealthsystems.com` unless the API host changes.
+- Nexus attachment uploads are proxied through the backend before being written
+  to the private R2 bucket, so R2 bucket CORS does not need to list every
+  partner custom domain.
 - The Caddy HTTPS listener uses the Cloudflare Origin CA certificate, routes `api.aeonichealthsystems.com` to the backend, and routes all other HTTPS hostnames to Nexus. This lets tenant custom hostnames complete origin TLS without requiring Cloudflare custom origin SNI. If the Cloudflare account is provisioned for custom origin SNI, set `CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI=nexus.aeonichealthsystems.com`.
 - Tenant domains still need to be saved in the Partner app. The API allows CORS from saved HTTPS patient domains dynamically.
 

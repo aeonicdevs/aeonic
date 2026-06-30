@@ -446,32 +446,23 @@ function formatFileSize(value: number | undefined) {
 }
 
 async function uploadAttachment(file: File) {
-  const created = await api<{
-    attachment: PatientAttachment;
-    upload: { method: 'PUT'; url: string; headers: Record<string, string> };
-  }>('/patients/attachments/uploads', {
+  const response = await fetch(`${API_BASE}/patients/attachments/uploads`, {
     method: 'POST',
-    body: JSON.stringify({
-      file_name: file.name,
-      content_type: file.type || 'application/octet-stream',
-      size: file.size,
-    }),
-  });
-
-  const uploadResponse = await fetch(created.upload.url, {
-    method: created.upload.method,
-    headers: created.upload.headers,
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-Aeonic-File-Name': file.name,
+      'X-Aeonic-File-Size': String(file.size),
+      ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
+    },
     body: file,
   });
-  if (!uploadResponse.ok) {
-    throw new Error(`Unable to upload ${file.name}`);
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(formatApiDetail(body.detail));
   }
 
-  const completed = await api<{ attachment: PatientAttachment }>(
-    `/patients/attachments/${encodeURIComponent(created.attachment.id ?? '')}/complete`,
-    { method: 'POST' },
-  );
-  return completed.attachment;
+  return (body as { attachment: PatientAttachment }).attachment;
 }
 
 async function uploadDraftAttachments(files: File[]) {

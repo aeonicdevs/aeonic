@@ -537,6 +537,14 @@ def test_admin_can_simulate_mock_arora_conversations(monkeypatch, tmp_path) -> N
     monkeypatch.setenv("R2_ACCESS_KEY_ID", "test-access-key")
     monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "test-secret-key")
     monkeypatch.setenv("R2_BUCKET_NAME", "nexus-private")
+    uploaded_objects = []
+    monkeypatch.setattr(
+        main,
+        "_r2_put_object",
+        lambda object_key, content, content_type: uploaded_objects.append(
+            {"object_key": object_key, "content": content, "content_type": content_type}
+        ),
+    )
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]
     patient_token, patient_id = _create_patient_session(client, suffix)
@@ -628,32 +636,34 @@ def test_admin_can_simulate_mock_arora_conversations(monkeypatch, tmp_path) -> N
 
     upload = client.post(
         "/patients/attachments/uploads",
-        headers={"Authorization": f"Bearer {patient_token}"},
-        json={"file_name": "lab result.png", "content_type": "image/png", "size": 2048},
+        headers={
+            "Authorization": f"Bearer {patient_token}",
+            "Content-Type": "image/png",
+            "X-Aeonic-File-Name": "lab result.png",
+            "X-Aeonic-File-Size": "13",
+        },
+        content=b"fake png data",
     )
     assert upload.status_code == 200
-    assert upload.json()["attachment"]["status"] == "pending_upload"
-    assert upload.json()["upload"]["method"] == "PUT"
-    assert upload.json()["upload"]["headers"] == {"Content-Type": "image/png"}
-    assert "X-Amz-Signature=" in upload.json()["upload"]["url"]
+    assert upload.json()["attachment"]["status"] == "uploaded"
     attachment_id = upload.json()["attachment"]["id"]
+    assert len(uploaded_objects) == 1
+    assert uploaded_objects[0]["content"] == b"fake png data"
+    assert uploaded_objects[0]["content_type"] == "image/png"
+    assert uploaded_objects[0]["object_key"].startswith("partners/")
+    assert f"/patients/{patient_id}/attachments/{attachment_id}/lab result.png" in uploaded_objects[0]["object_key"]
 
-    pending_attachment_reply = client.post(
-        f"/patients/arora/conversations/{conversation['conversationId']}/messages",
-        headers={"Authorization": f"Bearer {patient_token}"},
-        json={
-            "text": "This should wait for upload completion.",
-            "attachment_ids": [attachment_id],
+    size_mismatch = client.post(
+        "/patients/attachments/uploads",
+        headers={
+            "Authorization": f"Bearer {patient_token}",
+            "Content-Type": "image/png",
+            "X-Aeonic-File-Name": "mismatch.png",
+            "X-Aeonic-File-Size": "999",
         },
+        content=b"small",
     )
-    assert pending_attachment_reply.status_code == 422
-
-    completed = client.post(
-        f"/patients/attachments/{attachment_id}/complete",
-        headers={"Authorization": f"Bearer {patient_token}"},
-    )
-    assert completed.status_code == 200
-    assert completed.json()["attachment"]["status"] == "uploaded"
+    assert size_mismatch.status_code == 422
 
     opened = client.get(
         f"/patients/attachments/{attachment_id}/open",

@@ -96,14 +96,6 @@ class PatientMedicationShipmentRequest(BaseModel):
     amount: str | None = None
 
 
-class PatientAttachmentUploadCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    file_name: str = Field(min_length=1, max_length=180)
-    content_type: str = Field(min_length=3, max_length=120)
-    size: int = Field(gt=0)
-
-
 class AdminMedicationShipmentStatusUpdate(BaseModel):
     status: str = Field(min_length=1)
 
@@ -389,10 +381,6 @@ def _max_attachment_bytes() -> int:
         raise HTTPException(status_code=500, detail="NEXUS_ATTACHMENT_MAX_BYTES must be an integer") from error
 
 
-def _attachment_upload_expires_seconds() -> int:
-    return 10 * 60
-
-
 def _attachment_download_expires_seconds() -> int:
     return 5 * 60
 
@@ -413,12 +401,13 @@ def _r2_config() -> dict[str, str]:
     return config
 
 
-def _validate_attachment_upload(payload: PatientAttachmentUploadCreate) -> tuple[str, str, int]:
-    file_name = _safe_attachment_file_name(payload.file_name)
-    content_type = payload.content_type.strip().lower()
-    size = payload.size
+def _validate_attachment_upload(file_name: str, content_type: str, size: int) -> tuple[str, str, int]:
+    file_name = _safe_attachment_file_name(file_name)
+    content_type = content_type.strip().lower()
     if content_type not in ALLOWED_ATTACHMENT_CONTENT_TYPES:
         raise HTTPException(status_code=422, detail="Attachment type must be an image or PDF")
+    if size <= 0:
+        raise HTTPException(status_code=422, detail="Attachment is empty")
     if size > _max_attachment_bytes():
         raise HTTPException(status_code=422, detail="Attachment is larger than the configured upload limit")
     return file_name, content_type, size
@@ -549,6 +538,32 @@ def _sigv4_signing_key(secret_access_key: str, date_stamp: str) -> bytes:
     region_key = hmac.new(date_key, b"auto", hashlib.sha256).digest()
     service_key = hmac.new(region_key, b"s3", hashlib.sha256).digest()
     return hmac.new(service_key, b"aws4_request", hashlib.sha256).digest()
+
+
+def _r2_put_object(object_key: str, content: bytes, content_type: str) -> None:
+    url = _r2_presigned_url(
+        "PUT",
+        object_key,
+        expires_seconds=5 * 60,
+        content_type=content_type,
+    )
+    request = urllib.request.Request(
+        url,
+        data=content,
+        method="PUT",
+        headers={"Content-Type": content_type},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30):
+            return
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Attachment storage upload failed with HTTP {error.code}: {body or error.reason}",
+        ) from error
+    except urllib.error.URLError as error:
+        raise HTTPException(status_code=502, detail=f"Attachment storage upload failed: {error.reason}") from error
 
 
 def _split_patient_name(name: str) -> tuple[str, str]:
@@ -1895,12 +1910,26 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             }
 
     @app.post("/patients/attachments/uploads", tags=["patients"])
-    def patient_attachment_upload_create(
-        payload: PatientAttachmentUploadCreate,
+    async def patient_attachment_upload_create(
+        request: Request,
         authorization: str | None = Header(default=None),
+        content_type: str | None = Header(default=None),
+        x_aeonic_file_name: str | None = Header(default=None),
+        x_aeonic_file_size: str | None = Header(default=None),
     ) -> dict[str, object]:
-        file_name, content_type, size = _validate_attachment_upload(payload)
-        upload_expires = _attachment_upload_expires_seconds()
+        upload_content = await request.body()
+        try:
+            declared_size = int(x_aeonic_file_size or str(len(upload_content)))
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail="Attachment size must be a number") from error
+        if declared_size != len(upload_content):
+            raise HTTPException(status_code=422, detail="Attachment size does not match uploaded content")
+
+        file_name, normalized_content_type, size = _validate_attachment_upload(
+            x_aeonic_file_name or "attachment",
+            content_type or "application/octet-stream",
+            len(upload_content),
+        )
         with _connect(resolved_database_path) as db:
             patient_id = _authenticated(db, "patient", authorization)
             patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
@@ -1909,6 +1938,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
             attachment_id = uuid.uuid4().hex
             object_key = f"partners/{patient['partner_id']}/patients/{patient_id}/attachments/{attachment_id}/{file_name}"
+            now = datetime.now(UTC).isoformat()
             db.execute(
                 """
                 INSERT INTO patient_attachments (
@@ -1916,52 +1946,22 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_upload')
                 """,
-                (attachment_id, patient["partner_id"], patient_id, object_key, file_name, content_type, size),
+                (attachment_id, patient["partner_id"], patient_id, object_key, file_name, normalized_content_type, size),
             )
-            attachment = _get_patient_attachment(db, patient_id, attachment_id)
-            if attachment is None:
-                raise HTTPException(status_code=500, detail="Unable to create attachment")
-
-            upload_url = _r2_presigned_url(
-                "PUT",
-                object_key,
-                expires_seconds=upload_expires,
-                content_type=content_type,
-            )
-            return {
-                "attachment": _public_attachment(attachment),
-                "upload": {
-                    "method": "PUT",
-                    "url": upload_url,
-                    "headers": {"Content-Type": content_type},
-                    "expiresIn": upload_expires,
-                },
-            }
-
-    @app.post("/patients/attachments/{attachment_id}/complete", tags=["patients"])
-    def patient_attachment_upload_complete(
-        attachment_id: str,
-        authorization: str | None = Header(default=None),
-    ) -> dict[str, object]:
-        with _connect(resolved_database_path) as db:
-            patient_id = _authenticated(db, "patient", authorization)
-            attachment = _get_patient_attachment(db, patient_id, attachment_id)
-            if attachment is None:
-                raise HTTPException(status_code=404, detail="Attachment not found")
-            now = datetime.now(UTC).isoformat()
+            _r2_put_object(object_key, upload_content, normalized_content_type)
             db.execute(
                 """
                 UPDATE patient_attachments
-                SET status = 'uploaded', uploaded_at = COALESCE(uploaded_at, ?)
+                SET status = 'uploaded', uploaded_at = ?
                 WHERE id = ?
                   AND patient_id = ?
                 """,
                 (now, attachment_id, patient_id),
             )
-            updated_attachment = _get_patient_attachment(db, patient_id, attachment_id)
-            if updated_attachment is None:
-                raise HTTPException(status_code=500, detail="Unable to complete attachment")
-            return {"attachment": _public_attachment(updated_attachment)}
+            attachment = _get_patient_attachment(db, patient_id, attachment_id)
+            if attachment is None:
+                raise HTTPException(status_code=500, detail="Unable to save attachment")
+            return {"attachment": _public_attachment(attachment)}
 
     @app.get("/patients/attachments/{attachment_id}/open", tags=["patients"])
     def patient_attachment_open(
