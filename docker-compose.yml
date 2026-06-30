@@ -7,12 +7,18 @@ services:
       APP_ENV: production
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://admin.aeonichealthsystems.com,https://partner.aeonichealthsystems.com,https://nexus.aeonichealthsystems.com,https://www.aeonichealthsystems.com,https://aeonichealthsystems.com}
       NEXUS_DNS_TARGET: ${NEXUS_DNS_TARGET:-nexus.aeonichealthsystems.com}
+      NEXUS_API_BASE_URL: ${NEXUS_API_BASE_URL:-https://api.aeonichealthsystems.com}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
       CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
       CLOUDFLARE_CUSTOM_HOSTNAME_SSL_METHOD: ${CLOUDFLARE_CUSTOM_HOSTNAME_SSL_METHOD:-http}
       CLOUDFLARE_CUSTOM_HOSTNAME_CA: ${CLOUDFLARE_CUSTOM_HOSTNAME_CA:-}
       CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN: ${CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN:-}
       CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI: ${CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      NEXUS_ATTACHMENT_MAX_BYTES: ${NEXUS_ATTACHMENT_MAX_BYTES:-10485760}
       ARORA_API_BASE_URL: ${ARORA_API_BASE_URL:-https://api.gen-health.app}
       ARORA_API_MODE: ${ARORA_API_MODE:-mock}
       ARORA_API_KEY: ${ARORA_API_KEY:-}
