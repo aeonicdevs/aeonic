@@ -942,10 +942,14 @@ def _normalize_message_attachments(attachments: list[dict[str, Any]]) -> list[di
             raise AroraValidationError("Attachment URL is required")
         public_attachment: dict[str, Any] = {"url": url}
         for source_key, target_key in (
+            ("id", "id"),
             ("name", "name"),
             ("mimeType", "mimeType"),
             ("mime_type", "mimeType"),
             ("size", "size"),
+            ("status", "status"),
+            ("uploadedAt", "uploadedAt"),
+            ("uploaded_at", "uploadedAt"),
         ):
             if source_key in attachment and attachment[source_key] not in (None, ""):
                 public_attachment[target_key] = attachment[source_key]

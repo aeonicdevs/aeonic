@@ -79,9 +79,17 @@ type ConversationMessage = {
   senderUserId: string | null;
   senderName: string;
   text: string;
-  attachments: { url: string; name?: string; mimeType?: string; size?: number }[];
+  attachments: PatientAttachment[];
   updatedAt: string;
   createdAt: string;
+};
+type PatientAttachment = {
+  id?: string;
+  url: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+  status?: string;
 };
 
 type EntityPageConfig = {
@@ -257,12 +265,12 @@ const login = reactive({
 
 const conversationDraft = reactive({
   text: '',
-  attachmentUrls: '',
+  files: [] as File[],
 });
 
 const conversationMessageDraft = reactive({
   text: '',
-  attachmentUrls: '',
+  files: [] as File[],
 });
 
 const partnerLabel = computed(() => partner.value?.clinicName ?? 'Unconfigured clinic');
@@ -426,12 +434,64 @@ function isCurrentEntityRequest(requestId: number, page: EntityPageConfig) {
   return requestId === entityLoadRequestId && currentPage?.key === page.key && currentPage.path === page.path;
 }
 
-function parseAttachmentUrls(value: string) {
-  return value
-    .split(/\r?\n/)
-    .map((url) => url.trim())
-    .filter(Boolean)
-    .map((url) => ({ url, name: url.split('/').pop() || 'Attachment' }));
+function normalizeFiles(value: File[] | File | null | undefined) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function formatFileSize(value: number | undefined) {
+  if (!value) return '';
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function uploadAttachment(file: File) {
+  const created = await api<{
+    attachment: PatientAttachment;
+    upload: { method: 'PUT'; url: string; headers: Record<string, string> };
+  }>('/patients/attachments/uploads', {
+    method: 'POST',
+    body: JSON.stringify({
+      file_name: file.name,
+      content_type: file.type || 'application/octet-stream',
+      size: file.size,
+    }),
+  });
+
+  const uploadResponse = await fetch(created.upload.url, {
+    method: created.upload.method,
+    headers: created.upload.headers,
+    body: file,
+  });
+  if (!uploadResponse.ok) {
+    throw new Error(`Unable to upload ${file.name}`);
+  }
+
+  const completed = await api<{ attachment: PatientAttachment }>(
+    `/patients/attachments/${encodeURIComponent(created.attachment.id ?? '')}/complete`,
+    { method: 'POST' },
+  );
+  return completed.attachment;
+}
+
+async function uploadDraftAttachments(files: File[]) {
+  const attachments: PatientAttachment[] = [];
+  for (const file of files) {
+    attachments.push(await uploadAttachment(file));
+  }
+  return attachments;
+}
+
+async function openAttachment(attachment: PatientAttachment) {
+  if (attachment.id) {
+    const body = await api<{ downloadUrl: string }>(`/patients/attachments/${encodeURIComponent(attachment.id)}/open`);
+    window.open(body.downloadUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  if (attachment.url.startsWith('http://') || attachment.url.startsWith('https://')) {
+    window.open(attachment.url, '_blank', 'noopener,noreferrer');
+  }
 }
 
 function formatCell(row: EntityRow, column: EntityPageConfig['columns'][number]) {
@@ -606,12 +666,14 @@ async function createConversation() {
       method: 'POST',
       body: JSON.stringify({
         text: conversationDraft.text.trim(),
-        attachments: parseAttachmentUrls(conversationDraft.attachmentUrls),
+        attachment_ids: (await uploadDraftAttachments(normalizeFiles(conversationDraft.files)))
+          .map((attachment) => attachment.id)
+          .filter(Boolean),
       }),
     });
     selectedConversationId.value = body.conversation.conversationId;
     conversationDraft.text = '';
-    conversationDraft.attachmentUrls = '';
+    conversationDraft.files = [];
     await loadCurrentEntityPage();
     conversationNotice.value = 'Conversation started.';
   } catch (err) {
@@ -633,7 +695,9 @@ async function sendConversationMessage() {
         method: 'POST',
         body: JSON.stringify({
           text: conversationMessageDraft.text.trim(),
-          attachments: parseAttachmentUrls(conversationMessageDraft.attachmentUrls),
+          attachment_ids: (await uploadDraftAttachments(normalizeFiles(conversationMessageDraft.files)))
+            .map((attachment) => attachment.id)
+            .filter(Boolean),
         }),
       },
     );
@@ -642,7 +706,7 @@ async function sendConversationMessage() {
     ));
     conversationMessages.value = [...conversationMessages.value, body.message];
     conversationMessageDraft.text = '';
-    conversationMessageDraft.attachmentUrls = '';
+    conversationMessageDraft.files = [];
     conversationNotice.value = 'Message sent.';
   } catch (err) {
     entityError.value = err instanceof Error ? err.message : 'Unable to send message';
@@ -979,11 +1043,14 @@ onUnmounted(() => {
                       rows="4"
                       variant="outlined"
                     />
-                    <v-textarea
-                      v-model="conversationDraft.attachmentUrls"
-                      auto-grow
-                      label="Attachment URLs"
-                      rows="2"
+                    <v-file-input
+                      v-model="conversationDraft.files"
+                      accept="image/*,application/pdf"
+                      chips
+                      counter
+                      multiple
+                      prepend-icon="mdi-paperclip"
+                      label="Attachments"
                       variant="outlined"
                     />
                     <v-btn color="primary" :loading="savingConversation" prepend-icon="mdi-message-plus-outline" type="submit">
@@ -1073,8 +1140,10 @@ onUnmounted(() => {
                           size="small"
                           prepend-icon="mdi-paperclip"
                           variant="tonal"
+                          @click="openAttachment(attachment)"
                         >
                           {{ attachment.name || attachment.url }}
+                          <span v-if="attachment.size" class="attachment-size">{{ formatFileSize(attachment.size) }}</span>
                         </v-chip>
                       </div>
                     </div>
@@ -1089,11 +1158,14 @@ onUnmounted(() => {
                       rows="3"
                       variant="outlined"
                     />
-                    <v-textarea
-                      v-model="conversationMessageDraft.attachmentUrls"
-                      auto-grow
-                      label="Attachment URLs"
-                      rows="2"
+                    <v-file-input
+                      v-model="conversationMessageDraft.files"
+                      accept="image/*,application/pdf"
+                      chips
+                      counter
+                      multiple
+                      prepend-icon="mdi-paperclip"
+                      label="Attachments"
                       variant="outlined"
                     />
                     <v-btn color="primary" :loading="savingConversation" prepend-icon="mdi-send" type="submit">

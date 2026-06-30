@@ -532,7 +532,11 @@ def test_live_arora_product_methods_use_documented_shapes(monkeypatch) -> None:
     }
 
 
-def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
+def test_admin_can_simulate_mock_arora_conversations(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("R2_ACCOUNT_ID", "test-account")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "test-access-key")
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "test-secret-key")
+    monkeypatch.setenv("R2_BUCKET_NAME", "nexus-private")
     client = TestClient(create_app(tmp_path / "aeonic.sqlite3"))
     suffix = uuid4().hex[:8]
     patient_token, patient_id = _create_patient_session(client, suffix)
@@ -622,17 +626,61 @@ def test_admin_can_simulate_mock_arora_conversations(tmp_path) -> None:
     assert patient_messages.status_code == 200
     assert patient_messages.json()["messages"][1]["author"] == "patient"
 
+    upload = client.post(
+        "/patients/attachments/uploads",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={"file_name": "lab result.png", "content_type": "image/png", "size": 2048},
+    )
+    assert upload.status_code == 200
+    assert upload.json()["attachment"]["status"] == "pending_upload"
+    assert upload.json()["upload"]["method"] == "PUT"
+    assert upload.json()["upload"]["headers"] == {"Content-Type": "image/png"}
+    assert "X-Amz-Signature=" in upload.json()["upload"]["url"]
+    attachment_id = upload.json()["attachment"]["id"]
+
+    pending_attachment_reply = client.post(
+        f"/patients/arora/conversations/{conversation['conversationId']}/messages",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={
+            "text": "This should wait for upload completion.",
+            "attachment_ids": [attachment_id],
+        },
+    )
+    assert pending_attachment_reply.status_code == 422
+
+    completed = client.post(
+        f"/patients/attachments/{attachment_id}/complete",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["attachment"]["status"] == "uploaded"
+
+    opened = client.get(
+        f"/patients/attachments/{attachment_id}/open",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert opened.status_code == 200
+    assert opened.json()["downloadUrl"].startswith("https://test-account.r2.cloudflarestorage.com/nexus-private/")
+
+    other_patient_token, _ = _create_patient_session(client, f"{suffix}-other")
+    cross_patient_open = client.get(
+        f"/patients/attachments/{attachment_id}/open",
+        headers={"Authorization": f"Bearer {other_patient_token}"},
+    )
+    assert cross_patient_open.status_code == 404
+
     patient_reply = client.post(
         f"/patients/arora/conversations/{conversation['conversationId']}/messages",
         headers={"Authorization": f"Bearer {patient_token}"},
         json={
             "text": "Patient-authored follow-up.",
-            "attachments": [{"url": "https://example.com/lab.pdf", "name": "Lab PDF"}],
+            "attachment_ids": [attachment_id],
         },
     )
     assert patient_reply.status_code == 200
     assert patient_reply.json()["message"]["author"] == "patient"
-    assert patient_reply.json()["message"]["attachments"][0]["name"] == "Lab PDF"
+    assert patient_reply.json()["message"]["attachments"][0]["id"] == attachment_id
+    assert patient_reply.json()["message"]["attachments"][0]["name"] == "lab result.png"
 
     deleted_message = client.delete(
         f"/admin/mock/arora/conversations/{conversation['conversationId']}/messages/{reply_message_id}"
@@ -857,6 +905,34 @@ def test_local_partner_domain_skips_cloudflare_custom_hostname(tmp_path) -> None
     body = cloudflare.json()
     assert body["verification"]["status"] == "connected"
     assert body["cloudflare"]["status"] == "skipped"
+
+
+def test_cloudflare_custom_hostname_origin_defaults_to_nexus_when_unset(monkeypatch) -> None:
+    monkeypatch.delenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", raising=False)
+    monkeypatch.setenv("NEXUS_DNS_TARGET", "nexus.example.com")
+
+    assert main._cloudflare_custom_hostname_origin_payload()["custom_origin_server"] == "nexus.example.com"
+
+
+def test_cloudflare_custom_hostname_origin_defaults_to_nexus_when_empty(monkeypatch) -> None:
+    monkeypatch.setenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", "")
+    monkeypatch.setenv("NEXUS_DNS_TARGET", "nexus.example.com")
+
+    assert main._cloudflare_custom_hostname_origin_payload()["custom_origin_server"] == "nexus.example.com"
+
+
+def test_cloudflare_custom_hostname_origin_defaults_to_nexus_when_blank(monkeypatch) -> None:
+    monkeypatch.setenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", "   ")
+    monkeypatch.setenv("NEXUS_DNS_TARGET", "nexus.example.com")
+
+    assert main._cloudflare_custom_hostname_origin_payload()["custom_origin_server"] == "nexus.example.com"
+
+
+def test_cloudflare_custom_hostname_origin_uses_configured_value(monkeypatch) -> None:
+    monkeypatch.setenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", " https://origin.example.com ")
+    monkeypatch.setenv("NEXUS_DNS_TARGET", "nexus.example.com")
+
+    assert main._cloudflare_custom_hostname_origin_payload()["custom_origin_server"] == "origin.example.com"
 
 
 def test_partner_can_create_cloudflare_custom_hostname(monkeypatch, tmp_path) -> None:

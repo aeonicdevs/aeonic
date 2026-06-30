@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -38,6 +39,15 @@ CloudflareProvisioningStatus = Literal[
     "active",
     "needs_attention",
 ]
+ALLOWED_ATTACHMENT_CONTENT_TYPES = {
+    "application/pdf",
+    "image/gif",
+    "image/heic",
+    "image/heif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
 
 
 class PartnerSignup(BaseModel):
@@ -84,6 +94,14 @@ class PatientMedicationShipmentRequest(BaseModel):
     sex_at_birth: str | None = None
     payment_status: str = "paid"
     amount: str | None = None
+
+
+class PatientAttachmentUploadCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_name: str = Field(min_length=1, max_length=180)
+    content_type: str = Field(min_length=3, max_length=120)
+    size: int = Field(gt=0)
 
 
 class AdminMedicationShipmentStatusUpdate(BaseModel):
@@ -134,14 +152,14 @@ class PatientConversationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str | None = None
-    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 class PatientConversationMessageCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str | None = None
-    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 ARORA_ORDER_STAGES: tuple[dict[str, str], ...] = (
@@ -265,6 +283,19 @@ def _initialize_database(database_path: str | Path) -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS patient_attachments (
+                id TEXT PRIMARY KEY,
+                partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+                patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                object_key TEXT NOT NULL UNIQUE,
+                file_name TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('pending_upload', 'uploaded', 'deleted')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                uploaded_at TEXT
+            );
+
             """
         )
         _ensure_partner_domain_cloudflare_columns(db)
@@ -346,6 +377,178 @@ def _public_patient(patient: sqlite3.Row) -> dict[str, str]:
         "name": patient["name"],
         "email": patient["email"],
     }
+
+
+def _max_attachment_bytes() -> int:
+    configured = os.getenv("NEXUS_ATTACHMENT_MAX_BYTES")
+    if not configured:
+        return 10 * 1024 * 1024
+    try:
+        return max(1, int(configured))
+    except ValueError as error:
+        raise HTTPException(status_code=500, detail="NEXUS_ATTACHMENT_MAX_BYTES must be an integer") from error
+
+
+def _attachment_upload_expires_seconds() -> int:
+    return 10 * 60
+
+
+def _attachment_download_expires_seconds() -> int:
+    return 5 * 60
+
+
+def _r2_config() -> dict[str, str]:
+    config = {
+        "account_id": os.getenv("R2_ACCOUNT_ID", "").strip(),
+        "access_key_id": os.getenv("R2_ACCESS_KEY_ID", "").strip(),
+        "secret_access_key": os.getenv("R2_SECRET_ACCESS_KEY", "").strip(),
+        "bucket_name": os.getenv("R2_BUCKET_NAME", "").strip(),
+    }
+    missing = [key for key, value in config.items() if not value]
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Attachment storage is not configured. Missing: {', '.join(missing)}",
+        )
+    return config
+
+
+def _validate_attachment_upload(payload: PatientAttachmentUploadCreate) -> tuple[str, str, int]:
+    file_name = _safe_attachment_file_name(payload.file_name)
+    content_type = payload.content_type.strip().lower()
+    size = payload.size
+    if content_type not in ALLOWED_ATTACHMENT_CONTENT_TYPES:
+        raise HTTPException(status_code=422, detail="Attachment type must be an image or PDF")
+    if size > _max_attachment_bytes():
+        raise HTTPException(status_code=422, detail="Attachment is larger than the configured upload limit")
+    return file_name, content_type, size
+
+
+def _safe_attachment_file_name(value: str) -> str:
+    cleaned = value.strip().replace("\\", "/").split("/")[-1]
+    cleaned = re.sub(r"[^A-Za-z0-9._ -]+", "-", cleaned).strip(" .-")
+    if not cleaned:
+        return "attachment"
+    return cleaned[:180]
+
+
+def _public_attachment(attachment: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": attachment["id"],
+        "url": f"/patients/attachments/{attachment['id']}/open",
+        "name": attachment["file_name"],
+        "mimeType": attachment["content_type"],
+        "size": attachment["size"],
+        "status": attachment["status"],
+        "createdAt": attachment["created_at"],
+        "uploadedAt": attachment["uploaded_at"],
+    }
+
+
+def _get_patient_attachment(
+    db: sqlite3.Connection,
+    patient_id: str,
+    attachment_id: str,
+) -> sqlite3.Row | None:
+    return db.execute(
+        """
+        SELECT *
+        FROM patient_attachments
+        WHERE id = ?
+          AND patient_id = ?
+          AND status != 'deleted'
+        """,
+        (attachment_id, patient_id),
+    ).fetchone()
+
+
+def _conversation_attachments_from_ids(
+    db: sqlite3.Connection,
+    patient_id: str,
+    attachment_ids: list[str],
+) -> list[dict[str, Any]]:
+    if len(attachment_ids) > 10:
+        raise HTTPException(status_code=422, detail="Messages support up to 10 attachments")
+
+    attachments: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for attachment_id in attachment_ids:
+        normalized_id = attachment_id.strip()
+        if not normalized_id or normalized_id in seen:
+            continue
+        seen.add(normalized_id)
+        attachment = _get_patient_attachment(db, patient_id, normalized_id)
+        if attachment is None:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        if attachment["status"] != "uploaded":
+            raise HTTPException(status_code=422, detail="Attachment upload has not completed")
+        attachments.append(_public_attachment(attachment))
+    return attachments
+
+
+def _r2_presigned_url(
+    method: Literal["GET", "PUT"],
+    object_key: str,
+    *,
+    expires_seconds: int,
+    content_type: str | None = None,
+) -> str:
+    config = _r2_config()
+    host = f"{config['account_id']}.r2.cloudflarestorage.com"
+    bucket_name = config["bucket_name"]
+    now = datetime.now(UTC)
+    date_stamp = now.strftime("%Y%m%d")
+    amz_date = now.strftime("%Y%m%dT%H%M%SZ")
+    credential_scope = f"{date_stamp}/auto/s3/aws4_request"
+    canonical_uri = "/" + "/".join(
+        urllib.parse.quote(part, safe="~") for part in [bucket_name, *object_key.split("/")]
+    )
+
+    signed_headers = "host"
+    canonical_headers = f"host:{host}\n"
+    if content_type is not None:
+        signed_headers = "content-type;host"
+        canonical_headers = f"content-type:{content_type}\nhost:{host}\n"
+
+    query = {
+        "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+        "X-Amz-Credential": f"{config['access_key_id']}/{credential_scope}",
+        "X-Amz-Date": amz_date,
+        "X-Amz-Expires": str(expires_seconds),
+        "X-Amz-SignedHeaders": signed_headers,
+    }
+    canonical_query = "&".join(
+        f"{urllib.parse.quote(key, safe='')}={urllib.parse.quote(query[key], safe='~')}"
+        for key in sorted(query)
+    )
+    canonical_request = "\n".join(
+        [
+            method,
+            canonical_uri,
+            canonical_query,
+            canonical_headers,
+            signed_headers,
+            "UNSIGNED-PAYLOAD",
+        ]
+    )
+    string_to_sign = "\n".join(
+        [
+            "AWS4-HMAC-SHA256",
+            amz_date,
+            credential_scope,
+            hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
+        ]
+    )
+    signing_key = _sigv4_signing_key(config["secret_access_key"], date_stamp)
+    signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"https://{host}{canonical_uri}?{canonical_query}&X-Amz-Signature={signature}"
+
+
+def _sigv4_signing_key(secret_access_key: str, date_stamp: str) -> bytes:
+    date_key = hmac.new(f"AWS4{secret_access_key}".encode("utf-8"), date_stamp.encode("utf-8"), hashlib.sha256).digest()
+    region_key = hmac.new(date_key, b"auto", hashlib.sha256).digest()
+    service_key = hmac.new(region_key, b"s3", hashlib.sha256).digest()
+    return hmac.new(service_key, b"aws4_request", hashlib.sha256).digest()
 
 
 def _split_patient_name(name: str) -> tuple[str, str]:
@@ -763,8 +966,14 @@ def _cloudflare_zone_path(path: str = "") -> str:
 
 
 def _cloudflare_custom_hostname_origin_payload() -> dict[str, str]:
+    custom_origin = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN")
+    custom_origin_server = (
+        _normalize_host(custom_origin)
+        if custom_origin and custom_origin.strip()
+        else _nexus_dns_target()
+    )
     payload = {
-        "custom_origin_server": _normalize_host(os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN", _nexus_dns_target())),
+        "custom_origin_server": custom_origin_server,
     }
     origin_sni = os.getenv("CLOUDFLARE_CUSTOM_HOSTNAME_ORIGIN_SNI")
     if origin_sni:
@@ -1685,6 +1894,92 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                 "partner": _public_partner(partner),
             }
 
+    @app.post("/patients/attachments/uploads", tags=["patients"])
+    def patient_attachment_upload_create(
+        payload: PatientAttachmentUploadCreate,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        file_name, content_type, size = _validate_attachment_upload(payload)
+        upload_expires = _attachment_upload_expires_seconds()
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            if patient is None:
+                raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+            attachment_id = uuid.uuid4().hex
+            object_key = f"partners/{patient['partner_id']}/patients/{patient_id}/attachments/{attachment_id}/{file_name}"
+            db.execute(
+                """
+                INSERT INTO patient_attachments (
+                    id, partner_id, patient_id, object_key, file_name, content_type, size, status
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_upload')
+                """,
+                (attachment_id, patient["partner_id"], patient_id, object_key, file_name, content_type, size),
+            )
+            attachment = _get_patient_attachment(db, patient_id, attachment_id)
+            if attachment is None:
+                raise HTTPException(status_code=500, detail="Unable to create attachment")
+
+            upload_url = _r2_presigned_url(
+                "PUT",
+                object_key,
+                expires_seconds=upload_expires,
+                content_type=content_type,
+            )
+            return {
+                "attachment": _public_attachment(attachment),
+                "upload": {
+                    "method": "PUT",
+                    "url": upload_url,
+                    "headers": {"Content-Type": content_type},
+                    "expiresIn": upload_expires,
+                },
+            }
+
+    @app.post("/patients/attachments/{attachment_id}/complete", tags=["patients"])
+    def patient_attachment_upload_complete(
+        attachment_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            attachment = _get_patient_attachment(db, patient_id, attachment_id)
+            if attachment is None:
+                raise HTTPException(status_code=404, detail="Attachment not found")
+            now = datetime.now(UTC).isoformat()
+            db.execute(
+                """
+                UPDATE patient_attachments
+                SET status = 'uploaded', uploaded_at = COALESCE(uploaded_at, ?)
+                WHERE id = ?
+                  AND patient_id = ?
+                """,
+                (now, attachment_id, patient_id),
+            )
+            updated_attachment = _get_patient_attachment(db, patient_id, attachment_id)
+            if updated_attachment is None:
+                raise HTTPException(status_code=500, detail="Unable to complete attachment")
+            return {"attachment": _public_attachment(updated_attachment)}
+
+    @app.get("/patients/attachments/{attachment_id}/open", tags=["patients"])
+    def patient_attachment_open(
+        attachment_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        with _connect(resolved_database_path) as db:
+            patient_id = _authenticated(db, "patient", authorization)
+            attachment = _get_patient_attachment(db, patient_id, attachment_id)
+            if attachment is None or attachment["status"] != "uploaded":
+                raise HTTPException(status_code=404, detail="Attachment not found")
+            expires = _attachment_download_expires_seconds()
+            return {
+                "attachment": _public_attachment(attachment),
+                "downloadUrl": _r2_presigned_url("GET", attachment["object_key"], expires_seconds=expires),
+                "expiresIn": expires,
+            }
+
     @app.get("/patients/arora/products", tags=["patients"])
     def patient_arora_products(authorization: str | None = Header(default=None)) -> dict[str, object]:
         with _connect(resolved_database_path) as db:
@@ -1820,13 +2115,14 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             arora_client = _arora_client(db)
             conversation = arora_client.create_conversation(patient_id=patient_id)
             conversation_id = str(conversation.get("conversationId") or conversation.get("id") or "")
-            if payload.text is not None or payload.attachments:
+            attachments = _conversation_attachments_from_ids(db, patient_id, payload.attachment_ids)
+            if payload.text is not None or attachments:
                 result = arora_client.create_message(
                     conversation_id,
                     author="patient",
                     sender_name=patient["name"],
                     text=payload.text,
-                    attachments=payload.attachments,
+                    attachments=attachments,
                     patient_id=patient_id,
                 )
                 conversation = result["conversation"]
@@ -1869,12 +2165,13 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         with _connect(resolved_database_path) as db:
             patient_id = _authenticated(db, "patient", authorization)
             patient = db.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+            attachments = _conversation_attachments_from_ids(db, patient_id, payload.attachment_ids)
             result = _arora_client(db).create_message(
                 conversation_id,
                 author="patient",
                 sender_name=patient["name"] if patient is not None else "Patient",
                 text=payload.text,
-                attachments=payload.attachments,
+                attachments=attachments,
                 patient_id=patient_id,
             )
             return {

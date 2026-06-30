@@ -238,6 +238,12 @@ body {
   font-size: 0.85rem;
 }
 
+.attachment-size {
+  color: var(--ae-muted);
+  font-size: 0.75rem;
+  margin-left: 6px;
+}
+
 .message-row {
   max-width: min(82%, 680px);
   border: 1px solid var(--ae-line);
