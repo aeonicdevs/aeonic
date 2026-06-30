@@ -5,7 +5,7 @@ services:
     container_name: aeonic-backend
     environment:
       APP_ENV: production
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://admin.aeonichealthsystems.com,https://partner.aeonichealthsystems.com,https://nexus.aeonichealthsystems.com,https://www.aeonichealthsystems.com,https://aeonichealthsystems.com}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://admin.aeonichealthsystems.com,https://aeonic-admin-prod.netlify.app,https://partner.aeonichealthsystems.com,https://nexus.aeonichealthsystems.com,https://www.aeonichealthsystems.com,https://aeonichealthsystems.com}
       NEXUS_DNS_TARGET: ${NEXUS_DNS_TARGET:-nexus.aeonichealthsystems.com}
       NEXUS_API_BASE_URL: ${NEXUS_API_BASE_URL:-https://api.aeonichealthsystems.com}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
